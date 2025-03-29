@@ -234,9 +234,15 @@
     </div>
 
     <script>
-        // Game variables
+        // Инициализация WebGL
         const canvas = document.getElementById('game-canvas');
-        const ctx = canvas.getContext('2d');
+        const gl = canvas.getContext('webgl');
+        if (!gl) {
+            alert('WebGL не поддерживается вашим браузером!');
+            throw new Error('WebGL не поддерживается');
+        }
+
+        // Элементы HUD
         const healthFill = document.getElementById('health-fill');
         const ammoDisplay = document.getElementById('ammo-display');
         const weaponDisplay = document.getElementById('weapon-display');
@@ -246,15 +252,16 @@
         const gameWonScreen = document.getElementById('game-won');
         const loadingScreen = document.getElementById('loading-screen');
         const loadingProgress = document.getElementById('loading-progress');
-        
-        // Fallback textures
+
+        // Fallback текстуры
         const fallbackTextures = {
             wall: createColorTexture(32, 32, '#555'),
             floor: createColorTexture(32, 32, '#333'),
             ceiling: createColorTexture(32, 32, '#222'),
-            enemy: createEnemyTexture(32, 32)
+            enemy: createEnemyTexture(32, 32),
+            particle: createParticleTexture(16, 16)
         };
-        
+
         function createColorTexture(width, height, color) {
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = width;
@@ -264,7 +271,7 @@
             tempCtx.fillRect(0, 0, width, height);
             return tempCanvas;
         }
-        
+
         function createEnemyTexture(width, height) {
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = width;
@@ -276,14 +283,28 @@
             tempCtx.fillRect(width/4, height/4, width/2, height/2);
             return tempCanvas;
         }
-        
+
+        function createParticleTexture(width, height) {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            const tempCtx = tempCanvas.getContext('2d');
+            const gradient = tempCtx.createRadialGradient(width/2, height/2, 0, width/2, height/2, width/2);
+            gradient.addColorStop(0, 'rgba(255, 255, 0, 1)');
+            gradient.addColorStop(1, 'rgba(255, 255, 0, 0)');
+            tempCtx.fillStyle = gradient;
+            tempCtx.fillRect(0, 0, width, height);
+            return tempCanvas;
+        }
+
         const restartBtns = document.querySelectorAll('.restart-btn');
         restartBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 resetGame();
             });
         });
-        
+
+        // Игровые переменные
         const game = {
             player: {
                 x: 0,
@@ -321,15 +342,15 @@
                 rotateSpeed: 0.05
             },
             map: {
-                width: 8,
-                height: 8,
+                width: 16, // Увеличиваем карту до 16x16
+                height: 16,
                 grid: [],
                 stations: [
-                    { name: "Mayakovskaya", x: 4, y: 4 },
-                    { name: "Kurskaya", x: 2, y: 2 },
-                    { name: "Ploschad Revolyutsii", x: 6, y: 2 },
-                    { name: "Arbatskaya", x: 2, y: 6 },
-                    { name: "Komsomolskaya", x: 6, y: 6 }
+                    { name: "Mayakovskaya", x: 8, y: 8 },
+                    { name: "Kurskaya", x: 4, y: 4 },
+                    { name: "Ploschad Revolyutsii", x: 12, y: 4 },
+                    { name: "Arbatskaya", x: 4, y: 12 },
+                    { name: "Komsomolskaya", x: 12, y: 12 }
                 ],
                 currentStation: 0
             },
@@ -355,21 +376,154 @@
             fps: 0,
             zBuffer: []
         };
-        
-        function initGame() {
-            resizeCanvas();
-            window.addEventListener('resize', resizeCanvas);
-            generateMap();
-            setupEventListeners();
-            loadAssets();
+
+        // Шейдеры
+        const vertexShaderSource = `
+            attribute vec2 a_position;
+            attribute vec2 a_texCoord;
+            varying vec2 v_texCoord;
+            void main() {
+                gl_Position = vec4(a_position, 0.0, 1.0);
+                v_texCoord = a_texCoord;
+            }
+        `;
+
+        const fragmentShaderSource = `
+            precision mediump float;
+            varying vec2 v_texCoord;
+            uniform sampler2D u_texture;
+            uniform float u_wallDist;
+            uniform vec4 u_color;
+            void main() {
+                vec4 texColor = texture2D(u_texture, v_texCoord);
+                float brightness = 1.0 / (u_wallDist + 0.1);
+                gl_FragColor = texColor * brightness * u_color;
+            }
+        `;
+
+        const particleVertexShaderSource = `
+            attribute vec2 a_position;
+            attribute vec2 a_texCoord;
+            attribute float a_life;
+            varying vec2 v_texCoord;
+            varying float v_life;
+            uniform float u_pointSize;
+            void main() {
+                gl_Position = vec4(a_position, 0.0, 1.0);
+                gl_PointSize = u_pointSize;
+                v_texCoord = a_texCoord;
+                v_life = a_life;
+            }
+        `;
+
+        const particleFragmentShaderSource = `
+            precision mediump float;
+            varying vec2 v_texCoord;
+            varying float v_life;
+            uniform sampler2D u_texture;
+            void main() {
+                vec4 texColor = texture2D(u_texture, gl_PointCoord);
+                gl_FragColor = texColor * vec4(1.0, 1.0, 0.0, v_life);
+            }
+        `;
+
+        function createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error('Ошибка компиляции шейдера:', gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
         }
 
-function spawnEnemies() {
+        function createProgram(gl, vertexShader, fragmentShader) {
+            const program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                console.error('Ошибка линковки программы:', gl.getProgramInfoLog(program));
+                return null;
+            }
+            return program;
+        }
+
+        // Программа для стен, пола, потолка, врагов
+        const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+        const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+        const program = createProgram(gl, vertexShader, fragmentShader);
+
+        // Программа для частиц
+        const particleVertexShader = createShader(gl, gl.VERTEX_SHADER, particleVertexShaderSource);
+        const particleFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, particleFragmentShaderSource);
+        const particleProgram = createProgram(gl, particleVertexShader, particleFragmentShader);
+
+        // Атрибуты и униформы для основной программы
+        gl.useProgram(program);
+        const positionLocation = gl.getAttribLocation(program, 'a_position');
+        const texCoordLocation = gl.getAttribLocation(program, 'a_texCoord');
+        const textureLocation = gl.getUniformLocation(program, 'u_texture');
+        const wallDistLocation = gl.getUniformLocation(program, 'u_wallDist');
+        const colorLocation = gl.getUniformLocation(program, 'u_color');
+
+        // Атрибуты и униформы для частиц
+        gl.useProgram(particleProgram);
+        const particlePositionLocation = gl.getAttribLocation(particleProgram, 'a_position');
+        const particleTexCoordLocation = gl.getAttribLocation(particleProgram, 'a_texCoord');
+        const particleLifeLocation = gl.getAttribLocation(particleProgram, 'a_life');
+        const particleTextureLocation = gl.getUniformLocation(particleProgram, 'u_texture');
+        const pointSizeLocation = gl.getUniformLocation(particleProgram, 'u_pointSize');
+
+        // Буферы
+        const positionBuffer = gl.createBuffer();
+        const texCoordBuffer = gl.createBuffer();
+        const particlePositionBuffer = gl.createBuffer();
+        const particleTexCoordBuffer = gl.createBuffer();
+        const particleLifeBuffer = gl.createBuffer();
+
+        function initBuffers() {
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.enableVertexAttribArray(positionLocation);
+            gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+            gl.enableVertexAttribArray(texCoordLocation);
+            gl.vertexAttribPointer(texCoordLocation, 2, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, particlePositionBuffer);
+            gl.enableVertexAttribArray(particlePositionLocation);
+            gl.vertexAttribPointer(particlePositionLocation, 2, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, particleTexCoordBuffer);
+            gl.enableVertexAttribArray(particleTexCoordLocation);
+            gl.vertexAttribPointer(particleTexCoordLocation, 2, gl.FLOAT, false, 0, 0);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, particleLifeBuffer);
+            gl.enableVertexAttribArray(particleLifeLocation);
+            gl.vertexAttribPointer(particleLifeLocation, 1, gl.FLOAT, false, 0, 0);
+        }
+
+        initBuffers();
+
+        function loadTexture(gl, image) {
+            const texture = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            return texture;
+        }
+
+        function spawnEnemies() {
             game.enemies = [];
             const station = game.map.stations[game.map.currentStation];
-            const enemyCount = 2;
             
-            for (let i = 0; i < enemyCount; i++) {
+            function spawnSingleEnemy() {
                 let x, y, validPosition = false, attempts = 0;
                 while (!validPosition && attempts < 50) {
                     attempts++;
@@ -396,23 +550,18 @@ function spawnEnemies() {
                     });
                 }
             }
+
+            spawnSingleEnemy();
+            setTimeout(spawnSingleEnemy, 5000);
         }
-        
-        function resizeCanvas() {
-            canvas.width = window.innerWidth * 0.5; // Уменьшаем разрешение
-            canvas.height = window.innerHeight * 0.5;
-            canvas.style.width = `${window.innerWidth}px`; // Растягиваем на весь экран
-            canvas.style.height = `${window.innerHeight}px`;
-            game.zBuffer = new Array(canvas.width).fill(Infinity);
-        }
-        
+
         function generateMap() {
             game.map.grid = [];
             for (let y = 0; y < game.map.height; y++) {
                 game.map.grid[y] = [];
                 for (let x = 0; x < game.map.width; x++) {
                     if (x === 0 || y === 0 || x === game.map.width - 1 || y === game.map.height - 1) {
-                        game.map.grid[y][x] = 1; // Внешние стены
+                        game.map.grid[y][x] = 1;
                     } else {
                         game.map.grid[y][x] = 0;
                     }
@@ -423,12 +572,11 @@ function spawnEnemies() {
             for (let y = station.y - 1; y <= station.y + 1; y++) {
                 for (let x = station.x - 1; x <= station.x + 1; x++) {
                     if (x >= 0 && x < game.map.width && y >= 0 && y < game.map.height) {
-                        game.map.grid[y][x] = 0; // Очищаем место для станции
+                        game.map.grid[y][x] = 0;
                     }
                 }
             }
             
-            // Добавляем внутренние перегородки
             let wallCount = 0;
             for (let y = 1; y < game.map.height - 1; y++) {
                 for (let x = 1; x < game.map.width - 1; x++) {
@@ -441,9 +589,8 @@ function spawnEnemies() {
             }
             console.log(`Добавлено ${wallCount} внутренних перегородок`);
 
-            // Добавляем колонны
             let columnCount = 0;
-            for (let i = 0; i < 3; i++) {
+            for (let i = 0; i < 5; i++) {
                 let x, y, validPosition = false, attempts = 0;
                 while (!validPosition && attempts < 50) {
                     x = Math.floor(Math.random() * (game.map.width - 4)) + 2;
@@ -473,7 +620,24 @@ function spawnEnemies() {
             spawnEnemies();
             stationNameDisplay.textContent = station.name;
         }
-        
+
+        function initGame() {
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            generateMap();
+            setupEventListeners();
+            loadAssets();
+        }
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth * 0.5;
+            canvas.height = window.innerHeight * 0.5;
+            canvas.style.width = `${window.innerWidth}px`;
+            canvas.style.height = `${window.innerHeight}px`;
+            game.zBuffer = new Array(canvas.width).fill(Infinity);
+            gl.viewport(0, 0, canvas.width, canvas.height);
+        }
+
         function setupEventListeners() {
             window.addEventListener('keydown', (e) => {
                 game.keys[e.key.toLowerCase()] = true;
@@ -497,9 +661,9 @@ function spawnEnemies() {
             });
             canvas.addEventListener('click', shoot);
         }
-        
+
         function loadAssets() {
-            const textures = [
+             const textures = [
                 { name: 'wall', url: './assets/textures/wall.png' },
                 { name: 'floor', url: './assets/textures/floor.png' },
                 { name: 'ceiling', url: './assets/textures/ceiling.png' },
@@ -518,12 +682,12 @@ function spawnEnemies() {
             textures.forEach(texture => {
                 const img = new Image();
                 img.onload = () => {
-                    game.assets.textures[texture.name] = img;
+                    game.assets.textures[texture.name] = loadTexture(gl, img);
                     assetLoaded();
                 };
                 img.onerror = () => {
                     console.warn(`Ошибка загрузки текстуры ${texture.name}, используем запасную`);
-                    game.assets.textures[texture.name] = fallbackTextures[texture.name];
+                    game.assets.textures[texture.name] = loadTexture(gl, fallbackTextures[texture.name]);
                     assetLoaded();
                 };
                 img.src = texture.url;
@@ -561,7 +725,7 @@ function spawnEnemies() {
                 if (game.assetsLoaded < game.totalAssets) {
                     for (const texture in fallbackTextures) {
                         if (!game.assets.textures[texture]) {
-                            game.assets.textures[texture] = fallbackTextures[texture];
+                            game.assets.textures[texture] = loadTexture(gl, fallbackTextures[texture]);
                         }
                     }
                     loadingScreen.style.display = 'none';
@@ -572,7 +736,7 @@ function spawnEnemies() {
                 }
             }, 5000);
         }
-        
+
         function gameLoop(timestamp) {
             if (game.isGameOver || game.isGameWon) return;
             const deltaTime = timestamp - game.lastTime || 16;
@@ -587,7 +751,7 @@ function spawnEnemies() {
             render();
             requestAnimationFrame(gameLoop);
         }
-        
+
         function update(deltaTime) {
             const moveSpeed = game.player.moveSpeed * (deltaTime / 16);
             const rotateSpeed = game.player.rotateSpeed * (deltaTime / 16);
@@ -601,14 +765,14 @@ function spawnEnemies() {
             updateEnemies(deltaTime);
             updateParticles(deltaTime);
         }
-        
+
         function movePlayer(speed) {
             const newX = game.player.x + Math.cos(game.player.angle) * speed;
             const newY = game.player.y + Math.sin(game.player.angle) * speed;
             if (canMoveTo(newX, game.player.y)) game.player.x = newX;
             if (canMoveTo(game.player.x, newY)) game.player.y = newY;
         }
-        
+
         function strafePlayer(speed) {
             const angle = game.player.angle + Math.PI/2;
             const newX = game.player.x + Math.cos(angle) * speed;
@@ -616,7 +780,7 @@ function spawnEnemies() {
             if (canMoveTo(newX, game.player.y)) game.player.x = newX;
             if (canMoveTo(game.player.x, newY)) game.player.y = newY;
         }
-        
+
         function canMoveTo(x, y) {
             if (x < 0.3 || x >= game.map.width - 0.3 || y < 0.3 || y >= game.map.height - 0.3) return false;
             
@@ -647,61 +811,13 @@ function spawnEnemies() {
             }
             return true;
         }
-        
-        function updateBullets(deltaTime) {
-            for (let i = game.bullets.length - 1; i >= 0; i--) {
-                const bullet = game.bullets[i];
-                bullet.x += Math.cos(bullet.angle) * bullet.speed * (deltaTime / 16);
-                bullet.y += Math.sin(bullet.angle) * bullet.speed * (deltaTime / 16);
-                
-                const mapX = Math.floor(bullet.x);
-                const mapY = Math.floor(bullet.y);
-                
-                if (mapX < 0 || mapX >= game.map.width || mapY < 0 || mapY >= game.map.height || 
-                    game.map.grid[mapY][mapX] === 1) {
-                    createParticle(bullet.x, bullet.y, 5, '#ff0', 20);
-                    if (game.assets.sounds.hit) {
-                        const hitSound = game.assets.sounds.hit.cloneNode();
-                        hitSound.volume = 0.3;
-                        hitSound.play().catch(e => console.warn("Ошибка воспроизведения звука:", e));
-                    }
-                    game.bullets.splice(i, 1);
-                    continue;
-                }
-                
-                for (let j = game.enemies.length - 1; j >= 0; j--) {
-                    const enemy = game.enemies[j];
-                    const dx = bullet.x - enemy.x;
-                    const dy = bullet.y - enemy.y;
-                    const distance = Math.sqrt(dx*dx + dy*dy);
-                    
-                    if (distance < enemy.size) {
-                        enemy.health -= bullet.damage;
-                        createParticle(bullet.x, bullet.y, 10, '#f00', 30);
-                        if (game.assets.sounds.hit) {
-                            const hitSound = game.assets.sounds.hit.cloneNode();
-                            hitSound.volume = 0.5;
-                            hitSound.play().catch(e => console.warn("Ошибка воспроизведения звука:", e));
-                        }
-                        game.bullets.splice(i, 1);
-                        
-                        if (enemy.health <= 0) {
-                            if (game.assets.sounds.enemyDeath) {
-                                const deathSound = game.assets.sounds.enemyDeath.cloneNode();
-                                deathSound.volume = 0.7;
-                                deathSound.play().catch(e => console.warn("Ошибка воспроизведения звука:", e));
-                            }
-                            game.enemies.splice(j, 1);
-                            if (game.enemies.length === 0) nextStation();
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-        
+
+        let lastEnemyUpdate = 0;
         function updateEnemies(deltaTime) {
             const now = Date.now();
+            if (now - lastEnemyUpdate < 100) return;
+            lastEnemyUpdate = now;
+
             for (const enemy of game.enemies) {
                 const dx = game.player.x - enemy.x;
                 const dy = game.player.y - enemy.y;
@@ -733,22 +849,84 @@ function spawnEnemies() {
                 }
             }
         }
-        
+
+        function updateBullets(deltaTime) {
+            for (let i = game.bullets.length - 1; i >= 0; i--) {
+                const bullet = game.bullets[i];
+                bullet.x += Math.cos(bullet.angle) * bullet.speed * (deltaTime / 16);
+                bullet.y += Math.sin(bullet.angle) * bullet.speed * (deltaTime / 16);
+                
+                const mapX = Math.floor(bullet.x);
+                const mapY = Math.floor(bullet.y);
+                
+                if (mapX < 0 || mapX >= game.map.width || mapY < 0 || mapY >= game.map.height || 
+                    game.map.grid[mapY][mapX] === 1) {
+                    createParticle(bullet.x, bullet.y, 5, [1, 1, 0, 1], 20);
+                    if (game.assets.sounds.hit) {
+                        const hitSound = game.assets.sounds.hit.cloneNode();
+                        hitSound.volume = 0.3;
+                        hitSound.play().catch(e => console.warn("Ошибка воспроизведения звука:", e));
+                    }
+                    game.bullets.splice(i, 1);
+                    continue;
+                }
+                
+                for (let j = game.enemies.length - 1; j >= 0; j--) {
+                    const enemy = game.enemies[j];
+                    const dx = bullet.x - enemy.x;
+                    const dy = bullet.y - enemy.y;
+                    const distance = Math.sqrt(dx*dx + dy*dy);
+                    
+                    if (distance < enemy.size) {
+                        enemy.health -= bullet.damage;
+                        createParticle(bullet.x, bullet.y, 10, [1, 0, 0, 1], 30);
+                        if (game.assets.sounds.hit) {
+                            const hitSound = game.assets.sounds.hit.cloneNode();
+                            hitSound.volume = 0.5;
+                            hitSound.play().catch(e => console.warn("Ошибка воспроизведения звука:", e));
+                        }
+                        game.bullets.splice(i, 1);
+                        
+                        if (enemy.health <= 0) {
+                            if (game.assets.sounds.enemyDeath) {
+                                const deathSound = game.assets.sounds.enemyDeath.cloneNode();
+                                deathSound.volume = 0.7;
+                                deathSound.play().catch(e => console.warn("Ошибка воспроизведения звука:", e));
+                            }
+                            game.enemies.splice(j, 1);
+                            if (game.enemies.length === 0) nextStation();
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
         function updateParticles(deltaTime) {
             for (let i = game.particles.length - 1; i >= 0; i--) {
                 const particle = game.particles[i];
                 particle.x += Math.cos(particle.angle) * particle.speed * (deltaTime / 16);
                 particle.y += Math.sin(particle.angle) * particle.speed * (deltaTime / 16);
-                particle.life -= deltaTime;
+                particle.life -= deltaTime / particle.maxLife;
                 if (particle.life <= 0) game.particles.splice(i, 1);
             }
-            if (game.particles.length > 50) game.particles.splice(0, game.particles.length - 50);
+            if (game.particles.length > 100) game.particles.splice(0, game.particles.length - 100);
         }
-        
-        function createParticle(x, y, count, color, life) {
-            // Частицы отключены для оптимизации
+
+        function createParticle(x, y, count, color, maxLife) {
+            for (let i = 0; i < count; i++) {
+                game.particles.push({
+                    x: x,
+                    y: y,
+                    angle: Math.random() * Math.PI * 2,
+                    speed: Math.random() * 0.05 + 0.02,
+                    life: 1.0,
+                    maxLife: maxLife,
+                    color: color
+                });
+            }
         }
-        
+
         function shoot() {
             const weapon = game.player.weapons[game.player.currentWeapon];
             const now = Date.now();
@@ -779,12 +957,12 @@ function spawnEnemies() {
             createParticle(
                 game.player.x + Math.cos(game.player.angle) * 0.5,
                 game.player.y + Math.sin(game.player.angle) * 0.5,
-                2, '#ff0', 10
+                2, [1, 1, 0, 1], 10
             );
             
             updateAmmoDisplay();
         }
-        
+
         function reloadWeapon() {
             const weapon = game.player.weapons[game.player.currentWeapon];
             if (weapon.isReloading || weapon.ammo === weapon.maxAmmo || weapon.totalAmmo <= 0) return;
@@ -807,7 +985,7 @@ function spawnEnemies() {
                 showMessage(`${weapon.name} reloaded`);
             }, weapon.reloadTime);
         }
-        
+
         function updateHealthDisplay() {
             const healthPercent = (game.player.health / game.player.maxHealth) * 100;
             healthFill.style.width = `${isNaN(healthPercent) ? 0 : healthPercent}%`;
@@ -815,28 +993,28 @@ function spawnEnemies() {
             else if (healthPercent > 30) healthFill.style.backgroundColor = '#f39c12';
             else healthFill.style.backgroundColor = '#e74c3c';
         }
-        
+
         function updateAmmoDisplay() {
             const weapon = game.player.weapons[game.player.currentWeapon];
             ammoDisplay.textContent = `${weapon.ammo}/${weapon.totalAmmo}`;
         }
-        
+
         function updateWeaponDisplay() {
             const weapon = game.player.weapons[game.player.currentWeapon];
             weaponDisplay.textContent = weapon.name;
         }
-        
+
         function showMessage(text) {
             messageDisplay.textContent = text;
             messageDisplay.style.opacity = 1;
             setTimeout(() => messageDisplay.style.opacity = 0, 3000);
         }
-        
+
         function gameOver() {
             game.isGameOver = true;
             gameOverScreen.style.display = 'flex';
         }
-        
+
         function nextStation() {
             game.map.currentStation++;
             if (game.map.currentStation >= game.map.stations.length) {
@@ -849,7 +1027,7 @@ function spawnEnemies() {
                 setTimeout(generateMap, 2000);
             }
         }
-        
+
         function resetGame() {
             game.isGameOver = false;
             game.isGameWon = false;
@@ -868,38 +1046,61 @@ function spawnEnemies() {
             generateMap();
             requestAnimationFrame(gameLoop);
         }
-        
-        function render() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            game.zBuffer.fill(Infinity);
-            draw3DView();
-            drawParticles();
-            drawHUD();
-            ctx.fillStyle = 'white';
-            ctx.font = '16px Arial';
-            ctx.fillText(`FPS: ${game.fps}`, 10, 20);
+
+        function drawQuad(x1, y1, x2, y2, texX1, texY1, texX2, texY2, texture, wallDist, color) {
+            gl.useProgram(program);
+            const positions = new Float32Array([
+                x1, y1,
+                x2, y1,
+                x1, y2,
+                x2, y2
+            ]);
+
+            const texCoords = new Float32Array([
+                texX1, texY1,
+                texX2, texY1,
+                texX1, texY2,
+                texX2, texY2
+            ]);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
+
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.uniform1i(textureLocation, 0);
+            gl.uniform1f(wallDistLocation, wallDist);
+            gl.uniform4fv(colorLocation, color);
+
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         }
-        
+
         function draw3DView() {
             const fov = Math.PI / 3;
             const halfFov = fov / 2;
-            const rayStep = 12;
+            const rayStep = 1; // Минимальный шаг для устранения пикселизации
             const numRays = Math.floor(canvas.width / rayStep);
             const rayAngleStep = fov / numRays;
 
+            // Рендерим пол и потолок
             for (let column = 0; column < canvas.width; column += rayStep) {
                 const i = Math.floor(column / rayStep);
                 const rayAngle = game.player.angle - halfFov + i * rayAngleStep;
-                drawFloorAndCeiling(column, 0, canvas.height, rayAngle, 100);
+                drawFloorAndCeiling(column, rayAngle, rayStep);
             }
 
+            // Рендерим стены
             for (let i = 0; i < numRays; i++) {
                 const rayAngle = game.player.angle - halfFov + i * rayAngleStep;
                 castRay(rayAngle, i * rayStep, rayStep);
             }
+
             drawEnemies();
         }
-        
+
         function castRay(angle, column, rayStep) {
             let rayX = game.player.x, rayY = game.player.y;
             const rayDirX = Math.cos(angle), rayDirY = Math.sin(angle);
@@ -927,114 +1128,160 @@ function spawnEnemies() {
             }
             
             if (isNaN(wallDist) || wallDist <= 0) wallDist = 100;
-            const lineHeight = Math.floor(canvas.height / (wallDist + 0.0001));
+            const lineHeight = canvas.height / (wallDist + 0.0001);
             let drawStart = -lineHeight / 2 + canvas.height / 2; if (drawStart < 0) drawStart = 0;
             let drawEnd = lineHeight / 2 + canvas.height / 2; if (drawEnd >= canvas.height) drawEnd = canvas.height - 1;
 
             let wallX = side === 0 ? game.player.y + wallDist * rayDirY : game.player.x + wallDist * rayDirX;
             wallX -= Math.floor(wallX);
 
-            const texWidth = game.assets.textures.wall ? game.assets.textures.wall.width : 32;
-            const texX = Math.floor(wallX * 32) % 32;
+            const texX = wallX;
 
-            if (game.assets.textures.wall) {
-                ctx.drawImage(
-                    game.assets.textures.wall,
-                    texX, 0, 1, game.assets.textures.wall.height,
-                    column, drawStart, rayStep, drawEnd - drawStart
-                );
-            } else {
-                ctx.fillStyle = '#555';
-                ctx.fillRect(column, drawStart, rayStep, drawEnd - drawStart);
-            }
+            const x1 = (column / canvas.width) * 2 - 1;
+            const x2 = ((column + rayStep) / canvas.width) * 2 - 1;
+            const y1 = (drawStart / canvas.height) * 2 - 1;
+            const y2 = (drawEnd / canvas.height) * 2 - 1;
+
+            drawQuad(x1, y1, x2, y2, texX, 0, texX + (1 / 32), 1, game.assets.textures.wall, wallDist, [1, 1, 1, 1]);
 
             for (let x = column; x < column + rayStep; x++) {
                 if (x >= 0 && x < game.zBuffer.length) game.zBuffer[x] = wallDist;
             }
         }
-        
-        function drawFloorAndCeiling(column, wallTop, wallBottom, angle, wallDist) {
-            const rayStep = 12;
-            const horizon = canvas.height / 2;
-            const yStep = 3;
 
-            for (let y = horizon; y < canvas.height; y += yStep) {
+        function drawFloorAndCeiling(column, angle, rayStep) {
+            const horizon = canvas.height / 2;
+            const x1 = (column / canvas.width) * 2 - 1;
+            const x2 = ((column + rayStep) / canvas.width) * 2 - 1;
+
+            // Пол
+            for (let y = horizon; y < canvas.height; y += 2) {
                 const currentDist = canvas.height / (2.0 * y - canvas.height);
-                const weight = currentDist / wallDist;
-                const currentFloorX = weight * (game.player.x + Math.cos(angle) * wallDist) + (1.0 - weight) * game.player.x;
-                const currentFloorY = weight * (game.player.y + Math.sin(angle) * wallDist) + (1.0 - weight) * game.player.y;
-                const floorTexX = Math.floor(currentFloorX * 32) % 32;
-                const floorTexY = Math.floor(currentFloorY * 32) % 32;
-                ctx.drawImage(
-                    game.assets.textures.floor,
-                    floorTexX, floorTexY, 1, 1,
-                    column, y, rayStep, yStep
-                );
+                const weight = currentDist / 100;
+                const currentFloorX = weight * (game.player.x + Math.cos(angle) * 100) + (1.0 - weight) * game.player.x;
+                const currentFloorY = weight * (game.player.y + Math.sin(angle) * 100) + (1.0 - weight) * game.player.y;
+                const floorTexX = currentFloorX * 32 % 32 / 32;
+                const floorTexY = currentFloorY * 32 % 32 / 32;
+
+                const y1 = (y / canvas.height) * 2 - 1;
+                const y2 = ((y + 2) / canvas.height) * 2 - 1;
+
+                drawQuad(x1, y1, x2, y2, floorTexX, floorTexY, floorTexX + (1 / 32), floorTexY + (1 / 32), game.assets.textures.floor, currentDist, [1, 1, 1, 1]);
             }
 
-            for (let y = 0; y < horizon; y += yStep) {
+            // Потолок
+            for (let y = 0; y < horizon; y += 2) {
                 const currentDist = canvas.height / (canvas.height - 2.0 * y);
-                const weight = currentDist / wallDist;
-                const currentCeilingX = weight * (game.player.x + Math.cos(angle) * wallDist) + (1.0 - weight) * game.player.x;
-                const currentCeilingY = weight * (game.player.y + Math.sin(angle) * wallDist) + (1.0 - weight) * game.player.y;
-                const ceilingTexX = Math.floor(currentCeilingX * 32) % 32;
-                const ceilingTexY = Math.floor(currentCeilingY * 32) % 32;
-                ctx.drawImage(
-                    game.assets.textures.ceiling,
-                    ceilingTexX, ceilingTexY, 1, 1,
-                    column, y, rayStep, yStep
-                );
+                const weight = currentDist / 100;
+                const currentCeilingX = weight * (game.player.x + Math.cos(angle) * 100) + (1.0 - weight) * game.player.x;
+                const currentCeilingY = weight * (game.player.y + Math.sin(angle) * 100) + (1.0 - weight) * game.player.y;
+                const ceilingTexX = currentCeilingX * 32 % 32 / 32;
+                const ceilingTexY = currentCeilingY * 32 % 32 / 32;
+
+                const y1 = (y / canvas.height) * 2 - 1;
+                const y2 = ((y + 2) / canvas.height) * 2 - 1;
+
+                drawQuad(x1, y1, x2, y2, ceilingTexX, ceilingTexY, ceilingTexX + (1 / 32), ceilingTexY + (1 / 32), game.assets.textures.ceiling, currentDist, [1, 1, 1, 1]);
             }
         }
-        
+
         function drawEnemies() {
             const sortedEnemies = [...game.enemies].sort((a, b) => {
                 const distA = Math.sqrt(Math.pow(a.x - game.player.x, 2) + Math.pow(a.y - game.player.y, 2));
                 const distB = Math.sqrt(Math.pow(b.x - game.player.x, 2) + Math.pow(b.y - game.player.y, 2));
                 return distB - distA;
             });
-            for (const enemy of sortedEnemies) drawEnemy(enemy);
+
+            for (const enemy of sortedEnemies) {
+                const dx = enemy.x - game.player.x;
+                const dy = enemy.y - game.player.y;
+                const distance = Math.sqrt(dx*dx + dy*dy);
+                let angle = Math.atan2(dy, dx) - game.player.angle;
+                while (angle < -Math.PI) angle += 2*Math.PI;
+                while (angle > Math.PI) angle -= 2*Math.PI;
+                
+                const fov = Math.PI / 3;
+                if (Math.abs(angle) > fov / 2) continue;
+                
+                const enemyHeight = canvas.height / distance * enemy.size * 2;
+                const enemyWidth = enemyHeight;
+                const screenX = (angle + fov/2) / fov * canvas.width - enemyWidth/2;
+                const screenY = canvas.height/2 - enemyHeight/2;
+                
+                const centerX = Math.floor(screenX + enemyWidth/2);
+                if (centerX >= 0 && centerX < game.zBuffer.length && distance >= game.zBuffer[centerX]) continue;
+                
+                const x1 = (screenX / canvas.width) * 2 - 1;
+                const x2 = ((screenX + enemyWidth) / canvas.width) * 2 - 1;
+                const y1 = (screenY / canvas.height) * 2 - 1;
+                const y2 = ((screenY + enemyHeight) / canvas.height) * 2 - 1;
+
+                drawQuad(x1, y1, x2, y2, 0, 0, 1, 1, game.assets.textures.enemy, distance, [1, 1, 1, 1]);
+            }
         }
 
-        function drawEnemy(enemy) {
-            const dx = enemy.x - game.player.x;
-            const dy = enemy.y - game.player.y;
+        function drawParticles() {
+            if (game.particles.length === 0) return;
+
+            gl.useProgram(particleProgram);
+            const positions = new Float32Array(game.particles.length * 2);
+            const texCoords = new Float32Array(game.particles.length * 2);
+            const lives = new Float32Array(game.particles.length);
+
+            for (let i = 0; i < game.particles.length; i++) {
+                const particle = game.particles[i];
+                const screenX = projectToScreenX(particle.x, particle.y);
+                const screenY = projectToScreenY(particle.x, particle.y);
+                positions[i * 2] = screenX;
+                positions[i * 2 + 1] = screenY;
+                texCoords[i * 2] = 0.5;
+                texCoords[i * 2 + 1] = 0.5;
+                lives[i] = particle.life;
+            }
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, particlePositionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, particleTexCoordBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, particleLifeBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, lives, gl.STATIC_DRAW);
+
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, game.assets.textures.particle);
+            gl.uniform1i(particleTextureLocation, 0);
+            gl.uniform1f(pointSizeLocation, 10.0);
+
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+            gl.drawArrays(gl.POINTS, 0, game.particles.length);
+            gl.disable(gl.BLEND);
+        }
+
+        function projectToScreenX(x, y) {
+            const dx = x - game.player.x;
+            const dy = y - game.player.y;
             const distance = Math.sqrt(dx*dx + dy*dy);
             let angle = Math.atan2(dy, dx) - game.player.angle;
             while (angle < -Math.PI) angle += 2*Math.PI;
             while (angle > Math.PI) angle -= 2*Math.PI;
             
             const fov = Math.PI / 3;
-            if (Math.abs(angle) > fov / 2) return;
+            if (Math.abs(angle) > fov / 2) return -2; // Вне поля зрения
             
-            const enemyHeight = canvas.height / distance * enemy.size * 2;
-            const enemyWidth = enemyHeight;
-            const screenX = (angle + fov/2) / fov * canvas.width - enemyWidth/2;
-            const screenY = canvas.height/2 - enemyHeight/2;
-            
-            const centerX = Math.floor(screenX + enemyWidth/2);
-            if (centerX >= 0 && centerX < game.zBuffer.length && distance >= game.zBuffer[centerX]) return;
-            
-            ctx.drawImage(
-                game.assets.textures.enemy,
-                screenX, screenY,
-                enemyWidth, enemyHeight
-            );
-            
-            const healthPercent = enemy.health / enemy.maxHealth;
-            const healthBarWidth = enemyWidth * 0.8;
-            const healthBarHeight = 5;
-            ctx.fillStyle = '#300';
-            ctx.fillRect(screenX + enemyWidth * 0.1, screenY - 10, healthBarWidth, healthBarHeight);
-            ctx.fillStyle = '#f00';
-            ctx.fillRect(screenX + enemyWidth * 0.1, screenY - 10, healthBarWidth * healthPercent, healthBarHeight);
+            const screenX = (angle + fov/2) / fov * canvas.width;
+            return (screenX / canvas.width) * 2 - 1;
         }
 
-        function drawParticles() {
-            // Пустая функция, частицы отключены
+        function projectToScreenY(x, y) {
+            const distance = Math.sqrt(Math.pow(x - game.player.x, 2) + Math.pow(y - game.player.y, 2));
+            const screenY = canvas.height / 2 - (canvas.height / distance) / 2;
+            return (screenY / canvas.height) * 2 - 1;
         }
-        
+
         function drawHUD() {
+            const ctx = canvas.getContext('2d');
             const weapon = game.player.weapons[game.player.currentWeapon];
             const now = Date.now();
             const recoil = Math.min((now - weapon.lastShot) / 100, 1.0) * 0.1;
@@ -1048,10 +1295,21 @@ function spawnEnemies() {
                 ctx.fillStyle = '#f39c12';
                 ctx.fillRect(canvas.width * 0.3, canvas.height * 0.8, canvas.width * 0.4 * reloadProgress, 10);
             }
+
+            ctx.fillStyle = 'white';
+            ctx.font = '16px Arial';
+            ctx.fillText(`FPS: ${game.fps}`, 10, 20);
         }
-        
-        
-        
+
+        function render() {
+            gl.clearColor(0, 0, 0, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            game.zBuffer.fill(Infinity);
+            draw3DView();
+            drawParticles();
+            drawHUD();
+        }
+
         initGame();
     </script>
 </body>
