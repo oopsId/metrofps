@@ -544,14 +544,19 @@
                 img.src = texture.url;
             });
             
-            // Load sounds
-            sounds.forEach(sound => {
-                const audio = new Audio();
-                audio.src = sound.url;
-                game.assets.sounds[sound.name] = audio;
-                assetLoaded();
-            });
-        }
+           sounds.forEach(sound => {
+         const audio = new Audio();
+         audio.onload = () => assetLoaded();
+         audio.onerror = () => {
+        console.error("Ошибка загрузки звука:", sound.url);
+        assetLoaded();
+          };
+       // Если у вас есть альтернативный URL, можно прописать условие или сразу установить другой URL:
+        audio.src = sound.url;
+        game.assets.sounds[sound.name] = audio;
+       // Можно вызывать assetLoaded() здесь, если не ждём события oncanplaythrough
+         });
+
         
         // Track loaded assets
         function assetLoaded() {
