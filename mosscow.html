@@ -247,6 +247,36 @@
         const loadingScreen = document.getElementById('loading-screen');
         const loadingProgress = document.getElementById('loading-progress');
         
+        // Fallback textures
+        const fallbackTextures = {
+            wall: createColorTexture(64, 64, '#555'),
+            floor: createColorTexture(64, 64, '#333'),
+            ceiling: createColorTexture(64, 64, '#222'),
+            enemy: createEnemyTexture(64, 64)
+        };
+        
+        function createColorTexture(width, height, color) {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.fillStyle = color;
+            tempCtx.fillRect(0, 0, width, height);
+            return tempCanvas;
+        }
+        
+        function createEnemyTexture(width, height) {
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.fillStyle = '#900';
+            tempCtx.fillRect(0, 0, width, height);
+            tempCtx.fillStyle = '#700';
+            tempCtx.fillRect(width/4, height/4, width/2, height/2);
+            return tempCanvas;
+        }
+        
         const restartBtns = document.querySelectorAll('.restart-btn');
         restartBtns.forEach(btn => {
             btn.addEventListener('click', () => {
@@ -324,7 +354,10 @@
                 sounds: {}
             },
             assetsLoaded: 0,
-            totalAssets: 0
+            totalAssets: 0,
+            frameTimes: [],
+            fps: 0,
+            zBuffer: []  // Буфер глубины для рендеринга
         };
         
         function initGame() {
@@ -338,9 +371,11 @@
         function resizeCanvas() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
+            game.zBuffer = new Array(canvas.width).fill(Infinity);
         }
         
         function generateMap() {
+            game.map.grid = [];
             for (let y = 0; y < game.map.height; y++) {
                 game.map.grid[y] = [];
                 for (let x = 0; x < game.map.width; x++) {
@@ -365,7 +400,7 @@
                 for (let x = station.x - 3; x <= station.x + 3; x++) {
                     if (x >= 0 && x < game.map.width && y >= 0 && y < game.map.height) {
                         if (Math.abs(x - station.x) <= 1 && Math.abs(y - station.y) <= 1) continue;
-                        if (Math.random() < 0.5) {
+                        if (Math.random() < 0.4) {
                             game.map.grid[y][x] = 1;
                         }
                     }
@@ -375,16 +410,19 @@
             for (let i = 0; i < 5; i++) {
                 const x = Math.floor(Math.random() * (game.map.width - 4)) + 2;
                 const y = Math.floor(Math.random() * (game.map.height - 4)) + 2;
-                game.map.grid[y][x] = 1;
-                game.map.grid[y][x+1] = 1;
-                game.map.grid[y+1][x] = 1;
-                game.map.grid[y+1][x+1] = 1;
+                if (Math.abs(x - station.x) > 1 || Math.abs(y - station.y) > 1) {
+                    game.map.grid[y][x] = 1;
+                    if (x + 1 < game.map.width - 1 && y + 1 < game.map.height - 1) {
+                        game.map.grid[y][x+1] = 1;
+                        game.map.grid[y+1][x] = 1;
+                        game.map.grid[y+1][x+1] = 1;
+                    }
+                }
             }
             
             game.player.x = station.x + 0.5;
             game.player.y = station.y + 0.5;
             game.player.angle = Math.random() * Math.PI * 2;
-            
             spawnEnemies();
             stationNameDisplay.textContent = station.name;
         }
@@ -395,68 +433,57 @@
             const enemyCount = 5 + game.map.currentStation * 2;
             
             for (let i = 0; i < enemyCount; i++) {
-                let x, y;
-                let validPosition = false;
-                
-                while (!validPosition) {
+                let x, y, validPosition = false, attempts = 0;
+                while (!validPosition && attempts < 50) {
+                    attempts++;
                     x = Math.floor(Math.random() * (game.map.width - 4)) + 2;
                     y = Math.floor(Math.random() * (game.map.height - 4)) + 2;
-                    
                     if (game.map.grid[y][x] === 0) {
                         const dx = x - game.player.x;
                         const dy = y - game.player.y;
                         const distance = Math.sqrt(dx*dx + dy*dy);
-                        if (distance > 5) {
-                            validPosition = true;
-                        }
+                        if (distance > 5) validPosition = true;
                     }
                 }
-                
-                game.enemies.push({
-                    x: x + 0.5,
-                    y: y + 0.5,
-                    health: 50 + game.map.currentStation * 10,
-                    maxHealth: 50 + game.map.currentStation * 10,
-                    speed: 0.02 + game.map.currentStation * 0.005,
-                    damage: 10 + game.map.currentStation * 2,
-                    attackCooldown: 1000,
-                    lastAttack: 0,
-                    size: 0.4
-                });
+                if (validPosition) {
+                    game.enemies.push({
+                        x: x + 0.5,
+                        y: y + 0.5,
+                        health: 50 + game.map.currentStation * 10,
+                        maxHealth: 50 + game.map.currentStation * 10,
+                        speed: 0.02 + game.map.currentStation * 0.005,
+                        damage: 10 + game.map.currentStation * 2,
+                        attackCooldown: 1000,
+                        lastAttack: 0,
+                        size: 0.4
+                    });
+                }
             }
         }
         
         function setupEventListeners() {
-    window.addEventListener('keydown', (e) => {
-        game.keys[e.key.toLowerCase()] = true; // Приводим к нижнему регистру
-        if (e.key === '1') { game.player.currentWeapon = 0; updateWeaponDisplay(); }
-        else if (e.key === '2') { game.player.currentWeapon = 1; updateWeaponDisplay(); }
-        else if (e.key.toLowerCase() === 'r') reloadWeapon();
-    });
-    window.addEventListener('keyup', (e) => {
-        game.keys[e.key.toLowerCase()] = false;
-    });
-    canvas.addEventListener('mousemove', (e) => {
-        game.mouse.x = e.clientX;
-        game.mouse.y = e.clientY;
-        if (game.mouse.isDown) {
-            const centerX = canvas.width / 2;
-            game.player.angle += (game.mouse.x - centerX) * 0.005;
+            window.addEventListener('keydown', (e) => {
+                game.keys[e.key.toLowerCase()] = true;
+                if (e.key === '1') { game.player.currentWeapon = 0; updateWeaponDisplay(); }
+                else if (e.key === '2') { game.player.currentWeapon = 1; updateWeaponDisplay(); }
+                else if (e.key.toLowerCase() === 'r') reloadWeapon();
+            });
+            window.addEventListener('keyup', (e) => {
+                game.keys[e.key.toLowerCase()] = false;
+            });
+            canvas.addEventListener('mousemove', (e) => {
+                if (document.pointerLockElement === canvas) {
+                    game.player.angle += e.movementX * 0.002;
+                }
+            });
+            canvas.addEventListener('mousedown', () => {
+                canvas.requestPointerLock();
+            });
+            document.addEventListener('pointerlockchange', () => {
+                game.mouse.isDown = document.pointerLockElement === canvas;
+            });
+            canvas.addEventListener('click', shoot);
         }
-    });
-    canvas.addEventListener('mousedown', () => {
-        game.mouse.isDown = true;
-        canvas.requestPointerLock();
-    });
-    canvas.addEventListener('mouseup', () => game.mouse.isDown = false);
-    canvas.addEventListener('click', () => {
-        if (!game.soundsEnabled) {
-            game.soundsEnabled = true;
-            showMessage("Sound enabled!");
-        }
-        if (!game.mouse.isDown) shoot();
-    });
-}
         
         function loadAssets() {
             const textures = [
@@ -479,13 +506,13 @@
                 const img = new Image();
                 img.onload = () => {
                     game.assets.textures[texture.name] = img;
-                    console.log(`Текстура ${texture.name} загружена`);
                     assetLoaded();
                 };
                 img.onerror = () => {
-                console.error(`Ошибка загрузки текстуры ${texture.name} по пути ${texture.url}`);
-                assetLoaded();
-        };   
+                    console.warn(`Ошибка загрузки текстуры ${texture.name}, используем запасную`);
+                    game.assets.textures[texture.name] = fallbackTextures[texture.name];
+                    assetLoaded();
+                };
                 img.src = texture.url;
             });
             
@@ -496,7 +523,7 @@
                     assetLoaded();
                 };
                 audio.onerror = () => {
-                    console.error("Ошибка загрузки звука:", sound.url);
+                    console.warn(`Ошибка загрузки звука ${sound.name}`);
                     assetLoaded();
                 };
                 audio.src = sound.url;
@@ -505,114 +532,112 @@
             function assetLoaded() {
                 game.assetsLoaded++;
                 const progress = Math.floor((game.assetsLoaded / game.totalAssets) * 100);
-                 loadingProgress.style.width = `${isNaN(progress) ? 0 : progress}%`;
-                
+                loadingProgress.style.width = `${isNaN(progress) ? 0 : progress}%`;
                 if (game.assetsLoaded === game.totalAssets) {
                     setTimeout(() => {
                         loadingScreen.style.display = 'none';
+                        updateHealthDisplay();
+                        updateAmmoDisplay();
+                        updateWeaponDisplay();
                         requestAnimationFrame(gameLoop);
                     }, 500);
                 }
             }
+            
+            setTimeout(() => {
+                if (game.assetsLoaded < game.totalAssets) {
+                    for (const texture in fallbackTextures) {
+                        if (!game.assets.textures[texture]) {
+                            game.assets.textures[texture] = fallbackTextures[texture];
+                        }
+                    }
+                    loadingScreen.style.display = 'none';
+                    updateHealthDisplay();
+                    updateAmmoDisplay();
+                    updateWeaponDisplay();
+                    requestAnimationFrame(gameLoop);
+                }
+            }, 5000);
         }
         
-      function gameLoop(timestamp) {
-    if (game.isGameOver || game.isGameWon) return;
-    const deltaTime = Math.min(timestamp - game.lastTime, 100); // Ограничение до 100 мс
-    game.lastTime = timestamp;
-    console.time('update');
-    update(deltaTime);
-    console.timeEnd('update');
-    console.time('render');
-    render();
-    console.timeEnd('render');
-    requestAnimationFrame(gameLoop);
-}
+        function gameLoop(timestamp) {
+            if (game.isGameOver || game.isGameWon) return;
+            const deltaTime = timestamp - game.lastTime || 16;
+            game.lastTime = timestamp;
+            
+            game.frameTimes.push(deltaTime);
+            if (game.frameTimes.length > 60) game.frameTimes.shift();
+            const avgFrameTime = game.frameTimes.reduce((a, b) => a + b, 0) / game.frameTimes.length;
+            game.fps = Math.round(1000 / avgFrameTime);
+            
+            update(Math.min(deltaTime, 33));
+            render();
+            requestAnimationFrame(gameLoop);
+        }
         
         function update(deltaTime) {
-    const moveSpeed = game.player.moveSpeed * (deltaTime / 16);
-    const rotateSpeed = game.player.rotateSpeed * (deltaTime / 16);
+            const moveSpeed = game.player.moveSpeed * (deltaTime / 16);
+            const rotateSpeed = game.player.rotateSpeed * (deltaTime / 16);
 
-    if (game.keys['w'] || game.keys['ArrowUp']) {
-        console.log("W pressed, moving forward");
-        movePlayer(moveSpeed);
-    }
-    if (game.keys['s'] || game.keys['ArrowDown']) {
-        console.log("S pressed, moving backward");
-        movePlayer(-moveSpeed * 0.7);
-    }
-    if (game.keys['a'] || game.keys['ArrowLeft']) {
-        console.log("A pressed, rotating left");
-        game.player.angle -= rotateSpeed;
-    }
-    if (game.keys['d'] || game.keys['ArrowRight']) {
-        console.log("D pressed, rotating right");
-        game.player.angle += rotateSpeed;
-    }
-    if (game.keys['q']) {
-        console.log("Q pressed, strafing left");
-        strafePlayer(-moveSpeed * 0.7);
-    }
-    if (game.keys['e']) {
-        console.log("E pressed, strafing right");
-        strafePlayer(moveSpeed * 0.7);
-    }
-
-    updateBullets(deltaTime);
-    updateEnemies(deltaTime);
-    updateParticles(deltaTime);
-}
+            if (game.keys['w'] || game.keys['arrowup']) movePlayer(moveSpeed);
+            if (game.keys['s'] || game.keys['arrowdown']) movePlayer(-moveSpeed * 0.7);
+            if (game.keys['a'] || game.keys['arrowleft']) strafePlayer(-moveSpeed);
+            if (game.keys['d'] || game.keys['arrowright']) strafePlayer(moveSpeed);
+            
+            updateBullets(deltaTime);
+            updateEnemies(deltaTime);
+            updateParticles(deltaTime);
+        }
         
         function movePlayer(speed) {
             const newX = game.player.x + Math.cos(game.player.angle) * speed;
             const newY = game.player.y + Math.sin(game.player.angle) * speed;
-            
-            if (canMoveTo(newX, newY)) {
-                game.player.x = newX;
-                game.player.y = newY;
-            }
+            if (canMoveTo(newX, game.player.y)) game.player.x = newX;
+            if (canMoveTo(game.player.x, newY)) game.player.y = newY;
         }
         
         function strafePlayer(speed) {
             const angle = game.player.angle + Math.PI/2;
             const newX = game.player.x + Math.cos(angle) * speed;
             const newY = game.player.y + Math.sin(angle) * speed;
-            
-            if (canMoveTo(newX, newY)) {
-                game.player.x = newX;
-                game.player.y = newY;
-            }
+            if (canMoveTo(newX, game.player.y)) game.player.x = newX;
+            if (canMoveTo(game.player.x, newY)) game.player.y = newY;
         }
         
         function canMoveTo(x, y) {
-            if (x < 0.5 || x >= game.map.width - 0.5 || y < 0.5 || y >= game.map.height - 0.5) {
-                return false;
-            }
+            if (x < 0.3 || x >= game.map.width - 0.3 || y < 0.3 || y >= game.map.height - 0.3) return false;
             
             const mapX = Math.floor(x);
             const mapY = Math.floor(y);
             
-            if (game.map.grid[mapY][mapX] === 1) {
-                return false;
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    const checkX = mapX + dx;
+                    const checkY = mapY + dy;
+                    if (checkX >= 0 && checkX < game.map.width && checkY >= 0 && checkY < game.map.height) {
+                        if (game.map.grid[checkY][checkX] === 1) {
+                            const wallX = checkX + (dx > 0 ? 0 : 1);
+                            const wallY = checkY + (dy > 0 ? 0 : 1);
+                            const distX = x - wallX;
+                            const distY = y - wallY;
+                            if (Math.abs(distX) < 0.3 && Math.abs(distY) < 0.3) return false;
+                        }
+                    }
+                }
             }
             
             for (const enemy of game.enemies) {
                 const dx = x - enemy.x;
                 const dy = y - enemy.y;
                 const distance = Math.sqrt(dx*dx + dy*dy);
-                
-                if (distance < 0.7) {
-                    return false;
-                }
+                if (distance < 0.5) return false;
             }
-            
             return true;
         }
         
         function updateBullets(deltaTime) {
             for (let i = game.bullets.length - 1; i >= 0; i--) {
                 const bullet = game.bullets[i];
-                
                 bullet.x += Math.cos(bullet.angle) * bullet.speed * (deltaTime / 16);
                 bullet.y += Math.sin(bullet.angle) * bullet.speed * (deltaTime / 16);
                 
@@ -622,6 +647,11 @@
                 if (mapX < 0 || mapX >= game.map.width || mapY < 0 || mapY >= game.map.height || 
                     game.map.grid[mapY][mapX] === 1) {
                     createParticle(bullet.x, bullet.y, 5, '#ff0', 20);
+                    if (game.assets.sounds.hit) {
+                        const hitSound = game.assets.sounds.hit.cloneNode();
+                        hitSound.volume = 0.3;
+                        hitSound.play().catch(e => console.warn("Ошибка воспроизведения звука:", e));
+                    }
                     game.bullets.splice(i, 1);
                     continue;
                 }
@@ -634,22 +664,22 @@
                     
                     if (distance < enemy.size) {
                         enemy.health -= bullet.damage;
-                        createParticle(bullet.x, bullet.y, 5, '#f00', 20);
+                        createParticle(bullet.x, bullet.y, 10, '#f00', 30);
                         if (game.assets.sounds.hit) {
-                            game.assets.sounds.hit.currentTime = 0;
-                            game.assets.sounds.hit.play();
+                            const hitSound = game.assets.sounds.hit.cloneNode();
+                            hitSound.volume = 0.5;
+                            hitSound.play().catch(e => console.warn("Ошибка воспроизведения звука:", e));
                         }
                         game.bullets.splice(i, 1);
                         
                         if (enemy.health <= 0) {
                             if (game.assets.sounds.enemyDeath) {
-                                game.assets.sounds.enemyDeath.currentTime = 0;
-                                game.assets.sounds.enemyDeath.play();
+                                const deathSound = game.assets.sounds.enemyDeath.cloneNode();
+                                deathSound.volume = 0.7;
+                                deathSound.play().catch(e => console.warn("Ошибка воспроизведения звука:", e));
                             }
                             game.enemies.splice(j, 1);
-                            if (game.enemies.length === 0) {
-                                nextStation();
-                            }
+                            if (game.enemies.length === 0) nextStation();
                         }
                         break;
                     }
@@ -671,7 +701,6 @@
                     
                     const mapX = Math.floor(newX);
                     const mapY = Math.floor(newY);
-                    
                     if (mapX >= 0 && mapX < game.map.width && mapY >= 0 && mapY < game.map.height && 
                         game.map.grid[mapY][mapX] === 0) {
                         enemy.x = newX;
@@ -683,27 +712,25 @@
                     enemy.lastAttack = now;
                     game.player.health -= enemy.damage;
                     if (game.assets.sounds.playerHurt) {
-                        game.assets.sounds.playerHurt.currentTime = 0;
-                        game.assets.sounds.playerHurt.play();
+                        const hurtSound = game.assets.sounds.playerHurt.cloneNode();
+                        hurtSound.play().catch(e => console.warn("Ошибка воспроизведения звука:", e));
                     }
                     updateHealthDisplay();
-                    if (game.player.health <= 0) {
-                        gameOver();
-                    }
+                    if (game.player.health <= 0) gameOver();
                 }
             }
         }
         
-       function updateParticles(deltaTime) {
-    for (let i = game.particles.length - 1; i >= 0; i--) {
-        const particle = game.particles[i];
-        particle.x += Math.cos(particle.angle) * particle.speed * (deltaTime / 16);
-        particle.y += Math.sin(particle.angle) * particle.speed * (deltaTime / 16);
-        particle.life -= deltaTime;
-        if (particle.life <= 0) game.particles.splice(i, 1);
-    }
-    if (game.particles.length > 50) game.particles.splice(0, game.particles.length - 50); // Ограничение частиц
-}
+        function updateParticles(deltaTime) {
+            for (let i = game.particles.length - 1; i >= 0; i--) {
+                const particle = game.particles[i];
+                particle.x += Math.cos(particle.angle) * particle.speed * (deltaTime / 16);
+                particle.y += Math.sin(particle.angle) * particle.speed * (deltaTime / 16);
+                particle.life -= deltaTime;
+                if (particle.life <= 0) game.particles.splice(i, 1);
+            }
+            if (game.particles.length > 50) game.particles.splice(0, game.particles.length - 50);
+        }
         
         function createParticle(x, y, count, color, life) {
             for (let i = 0; i < count; i++) {
@@ -728,16 +755,14 @@
                 return;
             }
             
-            if (now - weapon.lastShot < weapon.fireRate || weapon.isReloading) {
-                return;
-            }
+            if (now - weapon.lastShot < weapon.fireRate || weapon.isReloading) return;
             
             weapon.lastShot = now;
             weapon.ammo--;
             
             if (game.assets.sounds.shot) {
-                game.assets.sounds.shot.currentTime = 0;
-                game.assets.sounds.shot.play();
+                const shotSound = game.assets.sounds.shot.cloneNode();
+                shotSound.play().catch(e => console.warn("Ошибка воспроизведения звука:", e));
             }
             
             game.bullets.push({
@@ -759,28 +784,21 @@
         
         function reloadWeapon() {
             const weapon = game.player.weapons[game.player.currentWeapon];
-            
-            if (weapon.isReloading || weapon.ammo === weapon.maxAmmo || weapon.totalAmmo <= 0) {
-                return;
-            }
+            if (weapon.isReloading || weapon.ammo === weapon.maxAmmo || weapon.totalAmmo <= 0) return;
             
             weapon.isReloading = true;
-            
             if (game.assets.sounds.reload) {
-                game.assets.sounds.reload.currentTime = 0;
-                game.assets.sounds.reload.play();
+                const reloadSound = game.assets.sounds.reload.cloneNode();
+                reloadSound.play().catch(e => console.warn("Ошибка воспроизведения звука:", e));
             }
-            
             showMessage(`Reloading ${weapon.name}...`);
             
             setTimeout(() => {
                 const ammoNeeded = weapon.maxAmmo - weapon.ammo;
                 const ammoAvailable = Math.min(ammoNeeded, weapon.totalAmmo);
-                
                 weapon.ammo += ammoAvailable;
                 weapon.totalAmmo -= ammoAvailable;
                 weapon.isReloading = false;
-                
                 updateAmmoDisplay();
                 updateWeaponDisplay();
                 showMessage(`${weapon.name} reloaded`);
@@ -790,13 +808,9 @@
         function updateHealthDisplay() {
             const healthPercent = (game.player.health / game.player.maxHealth) * 100;
             healthFill.style.width = `${isNaN(healthPercent) ? 0 : healthPercent}%`;
-            if (healthPercent > 60) {
-                healthFill.style.backgroundColor = '#2ecc71';
-            } else if (healthPercent > 30) {
-                healthFill.style.backgroundColor = '#f39c12';
-            } else {
-                healthFill.style.backgroundColor = '#e74c3c';
-            }
+            if (healthPercent > 60) healthFill.style.backgroundColor = '#2ecc71';
+            else if (healthPercent > 30) healthFill.style.backgroundColor = '#f39c12';
+            else healthFill.style.backgroundColor = '#e74c3c';
         }
         
         function updateAmmoDisplay() {
@@ -812,9 +826,7 @@
         function showMessage(text) {
             messageDisplay.textContent = text;
             messageDisplay.style.opacity = 1;
-            setTimeout(() => {
-                messageDisplay.style.opacity = 0;
-            }, 3000);
+            setTimeout(() => messageDisplay.style.opacity = 0, 3000);
         }
         
         function gameOver() {
@@ -831,9 +843,7 @@
                 showMessage(`Moving to ${game.map.stations[game.map.currentStation].name} station`);
                 game.player.health = game.player.maxHealth;
                 updateHealthDisplay();
-                setTimeout(() => {
-                    generateMap();
-                }, 2000);
+                setTimeout(generateMap, 2000);
             }
         }
         
@@ -842,149 +852,132 @@
             game.isGameWon = false;
             gameOverScreen.style.display = 'none';
             gameWonScreen.style.display = 'none';
-            
             game.player.health = game.player.maxHealth;
             game.player.weapons[0].ammo = 30;
             game.player.weapons[0].totalAmmo = 90;
             game.player.weapons[1].ammo = 8;
             game.player.weapons[1].totalAmmo = 32;
             game.player.currentWeapon = 0;
-            
             game.map.currentStation = 0;
-            
             updateHealthDisplay();
             updateAmmoDisplay();
             updateWeaponDisplay();
-            
             generateMap();
             requestAnimationFrame(gameLoop);
         }
         
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            ctx.fillStyle = '#333';
-            ctx.fillRect(0, 0, canvas.width, canvas.height / 2);
-            
-            ctx.fillStyle = '#555';
-            ctx.fillRect(0, canvas.height / 2, canvas.width, canvas.height / 2);
-            
+            game.zBuffer.fill(Infinity);
             draw3DView();
             drawParticles();
             drawHUD();
+            ctx.fillStyle = 'white';
+            ctx.font = '16px Arial';
+            ctx.fillText(`FPS: ${game.fps}`, 10, 20);
         }
         
-       function draw3DView() {
-       const fov = Math.PI / 3;
-       const halfFov = fov / 2;
-       const rayStep = 4; // Шаг между лучами
-       const numRays = Math.floor(canvas.width / rayStep);
-       const rayAngleStep = fov / numRays;
-        for (let i = 0; i < numRays; i++) {
-        const rayAngle = game.player.angle - halfFov + i * rayAngleStep;
-        castRay(rayAngle, i * rayStep, rayStep); // Передаем rayStep как параметр
-       }
-        drawEnemies();
-             }
+        function draw3DView() {
+            const fov = Math.PI / 3;
+            const halfFov = fov / 2;
+            const rayStep = 4;
+            const numRays = Math.floor(canvas.width / rayStep);
+            const rayAngleStep = fov / numRays;
+            for (let i = 0; i < numRays; i++) {
+                const rayAngle = game.player.angle - halfFov + i * rayAngleStep;
+                castRay(rayAngle, i * rayStep, rayStep);
+            }
+            drawEnemies();
+        }
         
-      function castRay(angle, column, rayStep) {
-    let rayX = game.player.x, rayY = game.player.y;
-    const rayDirX = Math.cos(angle), rayDirY = Math.sin(angle);
-    let sideDistX, sideDistY;
-    const deltaDistX = Math.abs(1 / rayDirX) || 1e10, deltaDistY = Math.abs(1 / rayDirY) || 1e10;
-    let stepX, stepY, mapX = Math.floor(rayX), mapY = Math.floor(rayY);
-    if (rayDirX < 0) { stepX = -1; sideDistX = (game.player.x - mapX) * deltaDistX; }
-    else { stepX = 1; sideDistX = (mapX + 1.0 - game.player.x) * deltaDistX; }
-    if (rayDirY < 0) { stepY = -1; sideDistY = (game.player.y - mapY) * deltaDistY; }
-    else { stepY = 1; sideDistY = (mapY + 1.0 - game.player.y) * deltaDistY; }
-    let hit = false, side, wallDist;
-    while (!hit) {
-        if (sideDistX < sideDistY) { sideDistX += deltaDistX; mapX += stepX; side = 0; }
-        else { sideDistY += deltaDistY; mapY += stepY; side = 1; }
-        if (mapX < 0 || mapX >= game.map.width || mapY < 0 || mapY >= game.map.height) { hit = true; wallDist = 100; }
-        else if (game.map.grid[mapY][mapX] === 1) {
-            hit = true;
-            wallDist = side === 0 ? (mapX - game.player.x + (1 - stepX) / 2) / rayDirX : (mapY - game.player.y + (1 - stepY) / 2) / rayDirY;
-            console.log(`Луч попал в стену на ${mapX},${mapY}, дистанция: ${wallDist}`);
+        function castRay(angle, column, rayStep) {
+            let rayX = game.player.x, rayY = game.player.y;
+            const rayDirX = Math.cos(angle), rayDirY = Math.sin(angle);
+            let sideDistX, sideDistY;
+            const deltaDistX = Math.abs(1 / rayDirX) || 1e10, deltaDistY = Math.abs(1 / rayDirY) || 1e10;
+            let stepX, stepY, mapX = Math.floor(rayX), mapY = Math.floor(rayY);
+            
+            if (rayDirX < 0) { stepX = -1; sideDistX = (game.player.x - mapX) * deltaDistX; }
+            else { stepX = 1; sideDistX = (mapX + 1.0 - game.player.x) * deltaDistX; }
+            if (rayDirY < 0) { stepY = -1; sideDistY = (game.player.y - mapY) * deltaDistY; }
+            else { stepY = 1; sideDistY = (mapY + 1.0 - game.player.y) * deltaDistY; }
+            
+            let hit = false, side, wallDist;
+            while (!hit) {
+                if (sideDistX < sideDistY) { sideDistX += deltaDistX; mapX += stepX; side = 0; }
+                else { sideDistY += deltaDistY; mapY += stepY; side = 1; }
+                if (mapX < 0 || mapX >= game.map.width || mapY < 0 || mapY >= game.map.height) { 
+                    hit = true; 
+                    wallDist = 100; 
+                } else if (game.map.grid[mapY][mapX] === 1) {
+                    hit = true;
+                    wallDist = side === 0 ? (mapX - game.player.x + (1 - stepX) / 2) / rayDirX : 
+                                          (mapY - game.player.y + (1 - stepY) / 2) / rayDirY;
+                }
+            }
+            
+            if (isNaN(wallDist) || wallDist <= 0) wallDist = 100;
+            const lineHeight = Math.floor(canvas.height / (wallDist + 0.0001));
+            let drawStart = -lineHeight / 2 + canvas.height / 2; if (drawStart < 0) drawStart = 0;
+            let drawEnd = lineHeight / 2 + canvas.height / 2; if (drawEnd >= canvas.height) drawEnd = canvas.height - 1;
+
+            let wallX = side === 0 ? game.player.y + wallDist * rayDirY : game.player.x + wallDist * rayDirX;
+            wallX -= Math.floor(wallX);
+
+            const texWidth = game.assets.textures.wall.width;
+            const texX = Math.floor(wallX * texWidth);
+
+            ctx.drawImage(
+                game.assets.textures.wall,
+                texX, 0, 1, game.assets.textures.wall.height,
+                column, drawStart, rayStep, drawEnd - drawStart
+            );
+
+            for (let x = column; x < column + rayStep; x++) {
+                if (x >= 0 && x < game.zBuffer.length) game.zBuffer[x] = wallDist;
+            }
+
+            drawFloorAndCeiling(column, drawStart, drawEnd, angle, wallDist);
         }
-    }
-    if (isNaN(wallDist) || wallDist <= 0) wallDist = 100;
-    const lineHeight = Math.floor(canvas.height / (wallDist + 0.0001));
-    let drawStart = -lineHeight / 2 + canvas.height / 2; if (drawStart < 0) drawStart = 0;
-    let drawEnd = lineHeight / 2 + canvas.height / 2; if (drawEnd >= canvas.height) drawEnd = canvas.height - 1;
-
-    let wallX;
-    if (side === 0) wallX = game.player.y + wallDist * rayDirY;
-    else wallX = game.player.x + wallDist * rayDirX;
-    wallX -= Math.floor(wallX);
-
-    const texWidth = game.assets.textures.wall ? game.assets.textures.wall.width : 64;
-    const texX = Math.floor(wallX * texWidth);
-
-    if (game.assets.textures.wall) {
-        console.log("Рисуем текстуру стены");
-        ctx.drawImage(
-            game.assets.textures.wall,
-            texX, 0, 1, game.assets.textures.wall.height,
-            column, drawStart, rayStep, drawEnd - drawStart
-        );
-    } else {
-        console.log("Текстура стены не загружена, используем цвет");
-        let color = side === 1 ? '#666' : '#888';
-        const shade = 1.0 - Math.min(wallDist / 15, 0.9);
-        const r = Math.floor(parseInt(color.substr(1, 2), 16) * shade);
-        const g = Math.floor(parseInt(color.substr(3, 2), 16) * shade);
-        const b = Math.floor(parseInt(color.substr(5, 2), 16) * shade);
-        const safeR = isNaN(r) ? 100 : r, safeG = isNaN(g) ? 100 : g, safeB = isNaN(b) ? 100 : b;
-        color = `rgb(${safeR},${safeG},${safeB})`;
-        ctx.fillStyle = color;
-        ctx.fillRect(column, drawStart, rayStep, drawEnd - drawStart);
-    }
-
-    if (game.assets.textures.floor && game.assets.textures.ceiling) {
-        drawFloorAndCeiling(column, drawEnd, angle, wallDist);
-    } else {
-        console.log("Текстуры пола или потолка не загружены");
-    }
-}
         
-      function drawFloorAndCeiling(column, wallBottom, angle, wallDist) {
-    const floorStart = wallBottom;
-    if (floorStart >= canvas.height) return;
-    const maxFloorHeight = Math.min(floorStart + 100, canvas.height);
-    for (let y = floorStart; y < maxFloorHeight; y++) {
-        const currentDist = canvas.height / (2.0 * y - canvas.height);
-        const weight = currentDist / wallDist;
-        const currentFloorX = weight * (game.player.x + Math.cos(angle) * wallDist) + (1.0 - weight) * game.player.x;
-        const currentFloorY = weight * (game.player.y + Math.sin(angle) * wallDist) + (1.0 - weight) * game.player.y;
-        const floorTexX = Math.floor(currentFloorX * 64) % 64, floorTexY = Math.floor(currentFloorY * 64) % 64;
-        const ceilingTexX = floorTexX, ceilingTexY = 63 - floorTexY;
-        if (game.assets.textures.floor) {
-            ctx.drawImage(game.assets.textures.floor, floorTexX, floorTexY, 1, 1, column, y, 4, 1);
+        function drawFloorAndCeiling(column, wallTop, wallBottom, angle, wallDist) {
+            const rayStep = 4;
+            const horizon = canvas.height / 2;
+            for (let y = Math.max(wallBottom, horizon); y < canvas.height; y++) {
+                const currentDist = canvas.height / (2.0 * y - canvas.height);
+                const weight = currentDist / wallDist;
+                const currentFloorX = weight * (game.player.x + Math.cos(angle) * wallDist) + (1.0 - weight) * game.player.x;
+                const currentFloorY = weight * (game.player.y + Math.sin(angle) * wallDist) + (1.0 - weight) * game.player.y;
+                const floorTexX = Math.floor(currentFloorX * 64) % 64;
+                const floorTexY = Math.floor(currentFloorY * 64) % 64;
+                ctx.drawImage(
+                    game.assets.textures.floor,
+                    floorTexX, floorTexY, 1, 1,
+                    column, y, rayStep, 1
+                );
+            }
+            for (let y = 0; y < Math.min(wallTop, horizon); y++) {
+                const currentDist = canvas.height / (canvas.height - 2.0 * y);
+                const weight = currentDist / wallDist;
+                const currentCeilingX = weight * (game.player.x + Math.cos(angle) * wallDist) + (1.0 - weight) * game.player.x;
+                const currentCeilingY = weight * (game.player.y + Math.sin(angle) * wallDist) + (1.0 - weight) * game.player.y;
+                const ceilingTexX = Math.floor(currentCeilingX * 64) % 64;
+                const ceilingTexY = Math.floor(currentCeilingY * 64) % 64;
+                ctx.drawImage(
+                    game.assets.textures.ceiling,
+                    ceilingTexX, ceilingTexY, 1, 1,
+                    column, y, rayStep, 1
+                );
+            }
         }
-        const ceilingY = canvas.height - y;
-        if (game.assets.textures.ceiling) {
-            ctx.drawImage(game.assets.textures.ceiling, ceilingTexX, ceilingTexY, 1, 1, column, ceilingY, 4, 1);
-        }
-    }
-}
         
         function drawEnemies() {
             const sortedEnemies = [...game.enemies].sort((a, b) => {
-                const distA = Math.sqrt(
-                    Math.pow(a.x - game.player.x, 2) + 
-                    Math.pow(a.y - game.player.y, 2)
-                );
-                const distB = Math.sqrt(
-                    Math.pow(b.x - game.player.x, 2) + 
-                    Math.pow(b.y - game.player.y, 2)
-                );
+                const distA = Math.sqrt(Math.pow(a.x - game.player.x, 2) + Math.pow(a.y - game.player.y, 2));
+                const distB = Math.sqrt(Math.pow(b.x - game.player.x, 2) + Math.pow(b.y - game.player.y, 2));
                 return distB - distA;
             });
-            
-            for (const enemy of sortedEnemies) {
-                drawEnemy(enemy);
-            }
+            for (const enemy of sortedEnemies) drawEnemy(enemy);
         }
         
         function drawEnemy(enemy) {
@@ -992,52 +985,41 @@
             const dy = enemy.y - game.player.y;
             const distance = Math.sqrt(dx*dx + dy*dy);
             let angle = Math.atan2(dy, dx) - game.player.angle;
-            
-            while (angle < -Math.PI) angle += 2 * Math.PI;
-            while (angle > Math.PI) angle -= 2 * Math.PI;
+            while (angle < -Math.PI) angle += 2*Math.PI;
+            while (angle > Math.PI) angle -= 2*Math.PI;
             
             const fov = Math.PI / 3;
             if (Math.abs(angle) > fov / 2) return;
             
-            const enemyHeight = canvas.height / distance * enemy.size;
+            const enemyHeight = canvas.height / distance * enemy.size * 2;
             const enemyWidth = enemyHeight;
-            
             const screenX = (angle + fov/2) / fov * canvas.width - enemyWidth/2;
             const screenY = canvas.height/2 - enemyHeight/2;
             
-            if (game.assets.textures.enemy) {
-                ctx.drawImage(
-                    game.assets.textures.enemy,
-                    screenX, screenY,
-                    enemyWidth, enemyHeight
-                );
-            } else {
-                ctx.fillStyle = '#f00';
-                ctx.fillRect(
-                    screenX, screenY,
-                    enemyWidth, enemyHeight
-                );
+            const columnStart = Math.floor(screenX);
+            const columnEnd = Math.ceil(screenX + enemyWidth);
+            let visible = false;
+            for (let x = columnStart; x < columnEnd; x++) {
+                if (x >= 0 && x < game.zBuffer.length && distance < game.zBuffer[x]) {
+                    visible = true;
+                    break;
+                }
             }
+            if (!visible) return;
+            
+            ctx.drawImage(
+                game.assets.textures.enemy,
+                screenX, screenY,
+                enemyWidth, enemyHeight
+            );
             
             const healthPercent = enemy.health / enemy.maxHealth;
             const healthBarWidth = enemyWidth * 0.8;
             const healthBarHeight = 5;
-            
             ctx.fillStyle = '#300';
-            ctx.fillRect(
-                screenX + enemyWidth * 0.1,
-                screenY - 10,
-                healthBarWidth,
-                healthBarHeight
-            );
-            
+            ctx.fillRect(screenX + enemyWidth * 0.1, screenY - 10, healthBarWidth, healthBarHeight);
             ctx.fillStyle = '#f00';
-            ctx.fillRect(
-                screenX + enemyWidth * 0.1,
-                screenY - 10,
-                healthBarWidth * healthPercent,
-                healthBarHeight
-            );
+            ctx.fillRect(screenX + enemyWidth * 0.1, screenY - 10, healthBarWidth * healthPercent, healthBarHeight);
         }
         
         function drawParticles() {
@@ -1046,10 +1028,9 @@
                 const dy = particle.y - game.player.y;
                 const distance = Math.sqrt(dx*dx + dy*dy);
                 const angle = Math.atan2(dy, dx) - game.player.angle;
-                
                 let normalizedAngle = angle;
-                while (normalizedAngle < -Math.PI) normalizedAngle += 2 * Math.PI;
-                while (normalizedAngle > Math.PI) normalizedAngle -= 2 * Math.PI;
+                while (normalizedAngle < -Math.PI) normalizedAngle += 2*Math.PI;
+                while (normalizedAngle > Math.PI) normalizedAngle -= 2*Math.PI;
                 
                 const fov = Math.PI / 3;
                 if (Math.abs(normalizedAngle) > fov / 2) continue;
@@ -1058,16 +1039,21 @@
                 const screenX = (normalizedAngle + fov/2) / fov * canvas.width - particleSize/2;
                 const screenY = canvas.height/2 - particleSize/2;
                 
+                const columnStart = Math.floor(screenX);
+                const columnEnd = Math.ceil(screenX + particleSize);
+                let visible = false;
+                for (let x = columnStart; x < columnEnd; x++) {
+                    if (x >= 0 && x < game.zBuffer.length && distance < game.zBuffer[x]) {
+                        visible = true;
+                        break;
+                    }
+                }
+                if (!visible) continue;
+                
                 ctx.fillStyle = particle.color;
                 ctx.globalAlpha = Math.min(particle.life / 100, 1.0);
                 ctx.beginPath();
-                ctx.arc(
-                    screenX + particleSize/2,
-                    screenY + particleSize/2,
-                    particleSize/2,
-                    0,
-                    Math.PI * 2
-                );
+                ctx.arc(screenX + particleSize/2, screenY + particleSize/2, particleSize/2, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.globalAlpha = 1.0;
             }
@@ -1077,31 +1063,15 @@
             const weapon = game.player.weapons[game.player.currentWeapon];
             const now = Date.now();
             const recoil = Math.min((now - weapon.lastShot) / 100, 1.0) * 0.1;
-            
             ctx.fillStyle = '#555';
-            ctx.fillRect(
-                canvas.width * 0.4,
-                canvas.height * 0.7 - canvas.height * recoil,
-                canvas.width * 0.2,
-                canvas.height * 0.2
-            );
+            ctx.fillRect(canvas.width * 0.4, canvas.height * 0.7 - canvas.height * recoil, canvas.width * 0.2, canvas.height * 0.2);
             
             if (weapon.isReloading) {
                 const reloadProgress = (now - (weapon.lastShot + weapon.fireRate)) / weapon.reloadTime;
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                ctx.fillRect(
-                    canvas.width * 0.3,
-                    canvas.height * 0.8,
-                    canvas.width * 0.4,
-                    10
-                );
+                ctx.fillRect(canvas.width * 0.3, canvas.height * 0.8, canvas.width * 0.4, 10);
                 ctx.fillStyle = '#f39c12';
-                ctx.fillRect(
-                    canvas.width * 0.3,
-                    canvas.height * 0.8,
-                    canvas.width * 0.4 * reloadProgress,
-                    10
-                );
+                ctx.fillRect(canvas.width * 0.3, canvas.height * 0.8, canvas.width * 0.4 * reloadProgress, 10);
             }
         }
         
