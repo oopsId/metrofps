@@ -249,10 +249,10 @@
         
         // Fallback textures
         const fallbackTextures = {
-            wall: createColorTexture(64, 64, '#555'),
-            floor: createColorTexture(64, 64, '#333'),
-            ceiling: createColorTexture(64, 64, '#222'),
-            enemy: createEnemyTexture(64, 64)
+            wall: createColorTexture(32, 32, '#555'),
+            floor: createColorTexture(32, 32, '#333'),
+            ceiling: createColorTexture(32, 32, '#222'),
+            enemy: createEnemyTexture(32, 32)
         };
         
         function createColorTexture(width, height, color) {
@@ -325,15 +325,11 @@
                 height: 8,
                 grid: [],
                 stations: [
-                    { name: "Mayakovskaya", x: 5, y: 5 },
-                    { name: "Kurskaya", x: 15, y: 5 },
-                    { name: "Ploschad Revolyutsii", x: 25, y: 5 },
-                    { name: "Arbatskaya", x: 5, y: 15 },
-                    { name: "Komsomolskaya", x: 15, y: 15 },
-                    { name: "Novoslobodskaya", x: 25, y: 15 },
-                    { name: "Kievskaya", x: 5, y: 25 },
-                    { name: "Belorusskaya", x: 15, y: 25 },
-                    { name: "Park Pobedy", x: 25, y: 25 }
+                    { name: "Mayakovskaya", x: 4, y: 4 },
+                    { name: "Kurskaya", x: 2, y: 2 },
+                    { name: "Ploschad Revolyutsii", x: 6, y: 2 },
+                    { name: "Arbatskaya", x: 2, y: 6 },
+                    { name: "Komsomolskaya", x: 6, y: 6 }
                 ],
                 currentStation: 0
             },
@@ -357,7 +353,7 @@
             totalAssets: 0,
             frameTimes: [],
             fps: 0,
-            zBuffer: []  // Буфер глубины для рендеринга
+            zBuffer: []
         };
         
         function initGame() {
@@ -369,78 +365,80 @@
         }
         
         function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            canvas.width = window.innerWidth * 0.5; // Уменьшаем разрешение
+            canvas.height = window.innerHeight * 0.5;
+            canvas.style.width = `${window.innerWidth}px`; // Растягиваем на весь экран
+            canvas.style.height = `${window.innerHeight}px`;
             game.zBuffer = new Array(canvas.width).fill(Infinity);
         }
         
         function generateMap() {
-    game.map.grid = [];
-    for (let y = 0; y < game.map.height; y++) {
-        game.map.grid[y] = [];
-        for (let x = 0; x < game.map.width; x++) {
-            if (x === 0 || y === 0 || x === game.map.width - 1 || y === game.map.height - 1) {
-                game.map.grid[y][x] = 1; // Внешние стены
-            } else {
-                game.map.grid[y][x] = 0;
+            game.map.grid = [];
+            for (let y = 0; y < game.map.height; y++) {
+                game.map.grid[y] = [];
+                for (let x = 0; x < game.map.width; x++) {
+                    if (x === 0 || y === 0 || x === game.map.width - 1 || y === game.map.height - 1) {
+                        game.map.grid[y][x] = 1; // Внешние стены
+                    } else {
+                        game.map.grid[y][x] = 0;
+                    }
+                }
             }
-        }
-    }
-    
-    const station = game.map.stations[game.map.currentStation];
-    for (let y = station.y - 1; y <= station.y + 1; y++) {
-        for (let x = station.x - 1; x <= station.x + 1; x++) {
-            if (x >= 0 && x < game.map.width && y >= 0 && y < game.map.height) {
-                game.map.grid[y][x] = 0; // Очищаем место для станции
+            
+            const station = game.map.stations[game.map.currentStation];
+            for (let y = station.y - 1; y <= station.y + 1; y++) {
+                for (let x = station.x - 1; x <= station.x + 1; x++) {
+                    if (x >= 0 && x < game.map.width && y >= 0 && y < game.map.height) {
+                        game.map.grid[y][x] = 0; // Очищаем место для станции
+                    }
+                }
             }
-        }
-    }
-    
-    // Добавляем внутренние перегородки
-    let wallCount = 0;
-    for (let y = 1; y < game.map.height - 1; y++) {
-        for (let x = 1; x < game.map.width - 1; x++) {
-            if (Math.abs(x - station.x) <= 1 && Math.abs(y - station.y) <= 1) continue;
-            if (Math.random() < 0.3) { // Уменьшаем вероятность, чтобы не было слишком много стен
-                game.map.grid[y][x] = 1;
-                wallCount++;
+            
+            // Добавляем внутренние перегородки
+            let wallCount = 0;
+            for (let y = 1; y < game.map.height - 1; y++) {
+                for (let x = 1; x < game.map.width - 1; x++) {
+                    if (Math.abs(x - station.x) <= 1 && Math.abs(y - station.y) <= 1) continue;
+                    if (Math.random() < 0.3) {
+                        game.map.grid[y][x] = 1;
+                        wallCount++;
+                    }
+                }
             }
-        }
-    }
-    console.log(`Добавлено ${wallCount} внутренних перегородок`);
+            console.log(`Добавлено ${wallCount} внутренних перегородок`);
 
-    // Добавляем колонны
-    let columnCount = 0;
-    for (let i = 0; i < 5; i++) {
-        let x, y, validPosition = false, attempts = 0;
-        while (!validPosition && attempts < 50) {
-            x = Math.floor(Math.random() * (game.map.width - 4)) + 2;
-            y = Math.floor(Math.random() * (game.map.height - 4)) + 2;
-            if (game.map.grid[y][x] === 0 && 
-                (x + 1 < game.map.width - 1 && y + 1 < game.map.height - 1) &&
-                game.map.grid[y][x+1] === 0 &&
-                game.map.grid[y+1][x] === 0 &&
-                game.map.grid[y+1][x+1] === 0) {
-                validPosition = true;
+            // Добавляем колонны
+            let columnCount = 0;
+            for (let i = 0; i < 3; i++) {
+                let x, y, validPosition = false, attempts = 0;
+                while (!validPosition && attempts < 50) {
+                    x = Math.floor(Math.random() * (game.map.width - 4)) + 2;
+                    y = Math.floor(Math.random() * (game.map.height - 4)) + 2;
+                    if (game.map.grid[y][x] === 0 && 
+                        (x + 1 < game.map.width - 1 && y + 1 < game.map.height - 1) &&
+                        game.map.grid[y][x+1] === 0 &&
+                        game.map.grid[y+1][x] === 0 &&
+                        game.map.grid[y+1][x+1] === 0) {
+                        validPosition = true;
+                    }
+                    attempts++;
+                }
+                if (validPosition) {
+                    game.map.grid[y][x] = 1;
+                    game.map.grid[y][x+1] = 1;
+                    game.map.grid[y+1][x] = 1;
+                    game.map.grid[y+1][x+1] = 1;
+                    columnCount++;
+                }
             }
-            attempts++;
-        }
-        if (validPosition) {
-            game.map.grid[y][x] = 1;
-            game.map.grid[y][x+1] = 1;
-            game.map.grid[y+1][x] = 1;
-            game.map.grid[y+1][x+1] = 1;
-            columnCount++;
-        }
-    }
-    console.log(`Добавлено ${columnCount} колонн 2x2`);
+            console.log(`Добавлено ${columnCount} колонн 2x2`);
 
-    game.player.x = station.x + 0.5;
-    game.player.y = station.y + 0.5;
-    game.player.angle = Math.random() * Math.PI * 2;
-    spawnEnemies();
-    stationNameDisplay.textContent = station.name;
-}
+            game.player.x = station.x + 0.5;
+            game.player.y = station.y + 0.5;
+            game.player.angle = Math.random() * Math.PI * 2;
+            spawnEnemies();
+            stationNameDisplay.textContent = station.name;
+        }
         
         function setupEventListeners() {
             window.addEventListener('keydown', (e) => {
@@ -468,10 +466,10 @@
         
         function loadAssets() {
             const textures = [
-                { name: 'wall', url: '/metrofps/assets/textures/wall.png' },
-                { name: 'floor', url: '/metrofps/assets/textures/floor.png' },
-                { name: 'ceiling', url: '/metrofps/assets/textures/ceiling.png' },
-                { name: 'enemy', url: '/metrofps/assets/textures/enemy.png' }
+                { name: 'wall', url: './assets/textures/wall.png' },
+                { name: 'floor', url: './assets/textures/floor.png' },
+                { name: 'ceiling', url: './assets/textures/ceiling.png' },
+                { name: 'enemy', url: './assets/textures/enemy.png' }
             ];
             const sounds = [
                 { name: 'shot', url: '/metrofps/assets/sfx/gun-shot-1680.mp3' },
@@ -714,17 +712,7 @@
         }
         
         function createParticle(x, y, count, color, life) {
-            for (let i = 0; i < count; i++) {
-                game.particles.push({
-                    x: x,
-                    y: y,
-                    angle: Math.random() * Math.PI * 2,
-                    speed: Math.random() * 0.1,
-                    color: color,
-                    size: Math.random() * 3 + 1,
-                    life: Math.random() * life + life/2
-                });
-            }
+            // Частицы отключены для оптимизации
         }
         
         function shoot() {
@@ -848,37 +836,35 @@
         }
         
         function render() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    game.zBuffer.fill(Infinity);
-    draw3DView();
-    drawParticles();
-    drawHUD();
-    ctx.fillStyle = 'white';
-    ctx.font = '16px Arial';
-    ctx.fillText(`FPS: ${game.fps}`, 10, 20); // Должно быть видно
-}
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            game.zBuffer.fill(Infinity);
+            draw3DView();
+            drawParticles();
+            drawHUD();
+            ctx.fillStyle = 'white';
+            ctx.font = '16px Arial';
+            ctx.fillText(`FPS: ${game.fps}`, 10, 20);
+        }
         
-      function draw3DView() {
-    const fov = Math.PI / 3;
-    const halfFov = fov / 2;
-    const rayStep = 16;
-    const numRays = Math.floor(canvas.width / rayStep);
-    const rayAngleStep = fov / numRays;
+        function draw3DView() {
+            const fov = Math.PI / 3;
+            const halfFov = fov / 2;
+            const rayStep = 12;
+            const numRays = Math.floor(canvas.width / rayStep);
+            const rayAngleStep = fov / numRays;
 
-    // Сначала рисуем пол и потолок для всех столбцов
-    for (let column = 0; column < canvas.width; column += rayStep) {
-        const i = Math.floor(column / rayStep);
-        const rayAngle = game.player.angle - halfFov + i * rayAngleStep;
-        drawFloorAndCeiling(column, 0, canvas.height, rayAngle, 100); // Используем максимальную дистанцию, если стены нет
-    }
+            for (let column = 0; column < canvas.width; column += rayStep) {
+                const i = Math.floor(column / rayStep);
+                const rayAngle = game.player.angle - halfFov + i * rayAngleStep;
+                drawFloorAndCeiling(column, 0, canvas.height, rayAngle, 100);
+            }
 
-    // Затем отбрасываем лучи и рисуем стены
-    for (let i = 0; i < numRays; i++) {
-        const rayAngle = game.player.angle - halfFov + i * rayAngleStep;
-        castRay(rayAngle, i * rayStep, rayStep);
-    }
-    drawEnemies();
-}
+            for (let i = 0; i < numRays; i++) {
+                const rayAngle = game.player.angle - halfFov + i * rayAngleStep;
+                castRay(rayAngle, i * rayStep, rayStep);
+            }
+            drawEnemies();
+        }
         
         function castRay(angle, column, rayStep) {
             let rayX = game.player.x, rayY = game.player.y;
@@ -914,131 +900,105 @@
             let wallX = side === 0 ? game.player.y + wallDist * rayDirY : game.player.x + wallDist * rayDirX;
             wallX -= Math.floor(wallX);
 
-            const texWidth = game.assets.textures.wall.width;
-            const texX = Math.floor(wallX * texWidth);
+            const texWidth = game.assets.textures.wall ? game.assets.textures.wall.width : 32;
+            const texX = Math.floor(wallX * 32) % 32;
 
-            ctx.drawImage(
-                game.assets.textures.wall,
-                texX, 0, 1, game.assets.textures.wall.height,
-                column, drawStart, rayStep, drawEnd - drawStart
-            );
+            if (game.assets.textures.wall) {
+                ctx.drawImage(
+                    game.assets.textures.wall,
+                    texX, 0, 1, game.assets.textures.wall.height,
+                    column, drawStart, rayStep, drawEnd - drawStart
+                );
+            } else {
+                ctx.fillStyle = '#555';
+                ctx.fillRect(column, drawStart, rayStep, drawEnd - drawStart);
+            }
 
             for (let x = column; x < column + rayStep; x++) {
                 if (x >= 0 && x < game.zBuffer.length) game.zBuffer[x] = wallDist;
             }
-
-            drawFloorAndCeiling(column, drawStart, drawEnd, angle, wallDist);
         }
         
-   function drawFloorAndCeiling(column, wallTop, wallBottom, angle, wallDist) {
-    const rayStep = 16;
-    const horizon = canvas.height / 2;
-    const yStep = 4;
+        function drawFloorAndCeiling(column, wallTop, wallBottom, angle, wallDist) {
+            const rayStep = 12;
+            const horizon = canvas.height / 2;
+            const yStep = 3;
 
-    // Рисуем пол от горизонта до низа экрана
-    for (let y = horizon; y < canvas.height; y += yStep) {
-        const currentDist = canvas.height / (2.0 * y - canvas.height);
-        const weight = currentDist / wallDist;
-        const currentFloorX = weight * (game.player.x + Math.cos(angle) * wallDist) + (1.0 - weight) * game.player.x;
-        const currentFloorY = weight * (game.player.y + Math.sin(angle) * wallDist) + (1.0 - weight) * game.player.y;
-        const floorTexX = Math.floor(currentFloorX * 64) % 64;
-        const floorTexY = Math.floor(currentFloorY * 64) % 64;
-        ctx.drawImage(
-            game.assets.textures.floor,
-            floorTexX, floorTexY, 1, 1,
-            column, y, rayStep, yStep
-        );
-    }
+            for (let y = horizon; y < canvas.height; y += yStep) {
+                const currentDist = canvas.height / (2.0 * y - canvas.height);
+                const weight = currentDist / wallDist;
+                const currentFloorX = weight * (game.player.x + Math.cos(angle) * wallDist) + (1.0 - weight) * game.player.x;
+                const currentFloorY = weight * (game.player.y + Math.sin(angle) * wallDist) + (1.0 - weight) * game.player.y;
+                const floorTexX = Math.floor(currentFloorX * 32) % 32;
+                const floorTexY = Math.floor(currentFloorY * 32) % 32;
+                ctx.drawImage(
+                    game.assets.textures.floor,
+                    floorTexX, floorTexY, 1, 1,
+                    column, y, rayStep, yStep
+                );
+            }
 
-    // Рисуем потолок от верха экрана до горизонта
-    for (let y = 0; y < horizon; y += yStep) {
-        const currentDist = canvas.height / (canvas.height - 2.0 * y);
-        const weight = currentDist / wallDist;
-        const currentCeilingX = weight * (game.player.x + Math.cos(angle) * wallDist) + (1.0 - weight) * game.player.x;
-        const currentCeilingY = weight * (game.player.y + Math.sin(angle) * wallDist) + (1.0 - weight) * game.player.y;
-        const ceilingTexX = Math.floor(currentCeilingX * 64) % 64;
-        const ceilingTexY = Math.floor(currentCeilingY * 64) % 64;
-        ctx.drawImage(
-            game.assets.textures.ceiling,
-            ceilingTexX, ceilingTexY, 1, 1,
-            column, y, rayStep, yStep
-        );
-    }
-}
+            for (let y = 0; y < horizon; y += yStep) {
+                const currentDist = canvas.height / (canvas.height - 2.0 * y);
+                const weight = currentDist / wallDist;
+                const currentCeilingX = weight * (game.player.x + Math.cos(angle) * wallDist) + (1.0 - weight) * game.player.x;
+                const currentCeilingY = weight * (game.player.y + Math.sin(angle) * wallDist) + (1.0 - weight) * game.player.y;
+                const ceilingTexX = Math.floor(currentCeilingX * 32) % 32;
+                const ceilingTexY = Math.floor(currentCeilingY * 32) % 32;
+                ctx.drawImage(
+                    game.assets.textures.ceiling,
+                    ceilingTexX, ceilingTexY, 1, 1,
+                    column, y, rayStep, yStep
+                );
+            }
+        }
         
-   function drawEnemies() {
-    const sortedEnemies = [...game.enemies].sort((a, b) => {
-        const distA = Math.sqrt(Math.pow(a.x - game.player.x, 2) + Math.pow(a.y - game.player.y, 2));
-        const distB = Math.sqrt(Math.pow(b.x - game.player.x, 2) + Math.pow(b.y - game.player.y, 2));
-        return distB - distA;
-    });
-    for (const enemy of sortedEnemies) drawEnemy(enemy);
-}
+        function drawEnemies() {
+            const sortedEnemies = [...game.enemies].sort((a, b) => {
+                const distA = Math.sqrt(Math.pow(a.x - game.player.x, 2) + Math.pow(a.y - game.player.y, 2));
+                const distB = Math.sqrt(Math.pow(b.x - game.player.x, 2) + Math.pow(b.y - game.player.y, 2));
+                return distB - distA;
+            });
+            for (const enemy of sortedEnemies) drawEnemy(enemy);
+        }
 
-function drawEnemy(enemy) {
-    const dx = enemy.x - game.player.x;
-    const dy = enemy.y - game.player.y;
-    const distance = Math.sqrt(dx*dx + dy*dy);
-    let angle = Math.atan2(dy, dx) - game.player.angle;
-    while (angle < -Math.PI) angle += 2*Math.PI;
-    while (angle > Math.PI) angle -= 2*Math.PI;
-    
-    const fov = Math.PI / 3;
-    if (Math.abs(angle) > fov / 2) return;
-    
-    const enemyHeight = canvas.height / distance * enemy.size * 2;
-    const enemyWidth = enemyHeight;
-    const screenX = (angle + fov/2) / fov * canvas.width - enemyWidth/2;
-    const screenY = canvas.height/2 - enemyHeight/2;
-    
-    // Проверяем видимость только в центре врага
-    const centerX = Math.floor(screenX + enemyWidth/2);
-    if (centerX >= 0 && centerX < game.zBuffer.length && distance >= game.zBuffer[centerX]) return;
-    
-    ctx.drawImage(
-        game.assets.textures.enemy,
-        screenX, screenY,
-        enemyWidth, enemyHeight
-    );
-    
-    const healthPercent = enemy.health / enemy.maxHealth;
-    const healthBarWidth = enemyWidth * 0.8;
-    const healthBarHeight = 5;
-    ctx.fillStyle = '#300';
-    ctx.fillRect(screenX + enemyWidth * 0.1, screenY - 10, healthBarWidth, healthBarHeight);
-    ctx.fillStyle = '#f00';
-    ctx.fillRect(screenX + enemyWidth * 0.1, screenY - 10, healthBarWidth * healthPercent, healthBarHeight);
-}
+        function drawEnemy(enemy) {
+            const dx = enemy.x - game.player.x;
+            const dy = enemy.y - game.player.y;
+            const distance = Math.sqrt(dx*dx + dy*dy);
+            let angle = Math.atan2(dy, dx) - game.player.angle;
+            while (angle < -Math.PI) angle += 2*Math.PI;
+            while (angle > Math.PI) angle -= 2*Math.PI;
+            
+            const fov = Math.PI / 3;
+            if (Math.abs(angle) > fov / 2) return;
+            
+            const enemyHeight = canvas.height / distance * enemy.size * 2;
+            const enemyWidth = enemyHeight;
+            const screenX = (angle + fov/2) / fov * canvas.width - enemyWidth/2;
+            const screenY = canvas.height/2 - enemyHeight/2;
+            
+            const centerX = Math.floor(screenX + enemyWidth/2);
+            if (centerX >= 0 && centerX < game.zBuffer.length && distance >= game.zBuffer[centerX]) return;
+            
+            ctx.drawImage(
+                game.assets.textures.enemy,
+                screenX, screenY,
+                enemyWidth, enemyHeight
+            );
+            
+            const healthPercent = enemy.health / enemy.maxHealth;
+            const healthBarWidth = enemyWidth * 0.8;
+            const healthBarHeight = 5;
+            ctx.fillStyle = '#300';
+            ctx.fillRect(screenX + enemyWidth * 0.1, screenY - 10, healthBarWidth, healthBarHeight);
+            ctx.fillStyle = '#f00';
+            ctx.fillRect(screenX + enemyWidth * 0.1, screenY - 10, healthBarWidth * healthPercent, healthBarHeight);
+        }
 
-function drawParticles() {
-    for (const particle of game.particles) {
-        const dx = particle.x - game.player.x;
-        const dy = particle.y - game.player.y;
-        const distance = Math.sqrt(dx*dx + dy*dy);
-        const angle = Math.atan2(dy, dx) - game.player.angle;
-        let normalizedAngle = angle;
-        while (normalizedAngle < -Math.PI) normalizedAngle += 2*Math.PI;
-        while (normalizedAngle > Math.PI) normalizedAngle -= 2*Math.PI;
-        
-        const fov = Math.PI / 3;
-        if (Math.abs(normalizedAngle) > fov / 2) continue;
-        
-        const particleSize = canvas.height / distance * particle.size;
-        const screenX = (normalizedAngle + fov/2) / fov * canvas.width - particleSize/2;
-        const screenY = canvas.height/2 - particleSize/2;
-        
-        // Проверяем видимость только в центре частицы
-        const centerX = Math.floor(screenX + particleSize/2);
-        if (centerX >= 0 && centerX < game.zBuffer.length && distance >= game.zBuffer[centerX]) continue;
-        
-        ctx.fillStyle = particle.color;
-        ctx.globalAlpha = Math.min(particle.life / 100, 1.0);
-        ctx.beginPath();
-        ctx.arc(screenX + particleSize/2, screenY + particleSize/2, particleSize/2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1.0;
-    }
-}
+        function drawParticles() {
+            // Пустая функция, частицы отключены
+        }
         
         function drawHUD() {
             const weapon = game.player.weapons[game.player.currentWeapon];
@@ -1053,6 +1013,40 @@ function drawParticles() {
                 ctx.fillRect(canvas.width * 0.3, canvas.height * 0.8, canvas.width * 0.4, 10);
                 ctx.fillStyle = '#f39c12';
                 ctx.fillRect(canvas.width * 0.3, canvas.height * 0.8, canvas.width * 0.4 * reloadProgress, 10);
+            }
+        }
+        
+        function spawnEnemies() {
+            game.enemies = [];
+            const station = game.map.stations[game.map.currentStation];
+            const enemyCount = 2;
+            
+            for (let i = 0; i < enemyCount; i++) {
+                let x, y, validPosition = false, attempts = 0;
+                while (!validPosition && attempts < 50) {
+                    attempts++;
+                    x = Math.floor(Math.random() * (game.map.width - 4)) + 2;
+                    y = Math.floor(Math.random() * (game.map.height - 4)) + 2;
+                    if (game.map.grid[y][x] === 0) {
+                        const dx = x - game.player.x;
+                        const dy = y - game.player.y;
+                        const distance = Math.sqrt(dx*dx + dy*dy);
+                        if (distance > 2) validPosition = true;
+                    }
+                }
+                if (validPosition) {
+                    game.enemies.push({
+                        x: x + 0.5,
+                        y: y + 0.5,
+                        health: 50 + game.map.currentStation * 10,
+                        maxHealth: 50 + game.map.currentStation * 10,
+                        speed: 0.02 + game.map.currentStation * 0.005,
+                        damage: 10 + game.map.currentStation * 2,
+                        attackCooldown: 1000,
+                        lastAttack: 0,
+                        size: 0.4
+                    });
+                }
             }
         }
         
