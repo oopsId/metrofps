@@ -28,7 +28,7 @@
         }
         
         #hud-canvas {
-            pointer-events: none; /* Чтобы события мыши проходили на нижний канвас */
+            pointer-events: none;
         }
         
         #hud {
@@ -251,7 +251,10 @@
 
         // Инициализация 2D контекста для HUD
         const hudCanvas = document.getElementById('hud-canvas');
-        const hudCtx = hudCanvas.getContext('2d');
+        const hudCtx = hudCanvas ? hudCanvas.getContext('2d') : null;
+        if (!hudCtx) {
+            console.error('Не удалось инициализировать 2D контекст для HUD canvas');
+        }
 
         // Элементы HUD
         const healthFill = document.getElementById('health-fill');
@@ -263,6 +266,9 @@
         const gameWonScreen = document.getElementById('game-won');
         const loadingScreen = document.getElementById('loading-screen');
         const loadingProgress = document.getElementById('loading-progress');
+
+        // Флаг для отслеживания взаимодействия пользователя
+        let userInteracted = false;
 
         // Fallback текстуры
         const fallbackTextures = {
@@ -311,6 +317,7 @@
         const restartBtns = document.querySelectorAll('.restart-btn');
         restartBtns.forEach(btn => {
             btn.addEventListener('click', () => {
+                userInteracted = true; // Пользователь взаимодействовал
                 resetGame();
             });
         });
@@ -646,10 +653,12 @@
             canvas.style.width = `${window.innerWidth}px`;
             canvas.style.height = `${window.innerHeight}px`;
             
-            hudCanvas.width = window.innerWidth * 0.5;
-            hudCanvas.height = window.innerHeight * 0.5;
-            hudCanvas.style.width = `${window.innerWidth}px`;
-            hudCanvas.style.height = `${window.innerHeight}px`;
+            if (hudCanvas) {
+                hudCanvas.width = window.innerWidth * 0.5;
+                hudCanvas.height = window.innerHeight * 0.5;
+                hudCanvas.style.width = `${window.innerWidth}px`;
+                hudCanvas.style.height = `${window.innerHeight}px`;
+            }
 
             game.zBuffer = new Array(canvas.width).fill(Infinity);
             gl.viewport(0, 0, canvas.width, canvas.height);
@@ -671,6 +680,7 @@
                 }
             });
             canvas.addEventListener('mousedown', () => {
+                userInteracted = true; // Пользователь взаимодействовал
                 canvas.requestPointerLock();
             });
             document.addEventListener('pointerlockchange', () => {
@@ -700,6 +710,7 @@
                 const img = new Image();
                 img.onload = () => {
                     game.assets.textures[texture.name] = loadTexture(gl, img);
+                    console.log(`Текстура ${texture.name} загружена`);
                     assetLoaded();
                 };
                 img.onerror = () => {
@@ -714,6 +725,7 @@
                 const audio = new Audio();
                 audio.oncanplaythrough = () => {
                     game.assets.sounds[sound.name] = audio;
+                    console.log(`Звук ${sound.name} загружен`);
                     assetLoaded();
                 };
                 audio.onerror = () => {
@@ -743,6 +755,7 @@
                     for (const texture in fallbackTextures) {
                         if (!game.assets.textures[texture]) {
                             game.assets.textures[texture] = loadTexture(gl, fallbackTextures[texture]);
+                            console.log(`Использована запасная текстура для ${texture}`);
                         }
                     }
                     loadingScreen.style.display = 'none';
@@ -857,7 +870,7 @@
                 if (distance < 2 && now - enemy.lastAttack > enemy.attackCooldown) {
                     enemy.lastAttack = now;
                     game.player.health -= enemy.damage;
-                    if (game.assets.sounds.playerHurt) {
+                    if (userInteracted && game.assets.sounds.playerHurt) {
                         const hurtSound = game.assets.sounds.playerHurt.cloneNode();
                         hurtSound.play().catch(e => console.warn("Ошибка воспроизведения звука:", e));
                     }
@@ -879,7 +892,7 @@
                 if (mapX < 0 || mapX >= game.map.width || mapY < 0 || mapY >= game.map.height || 
                     game.map.grid[mapY][mapX] === 1) {
                     createParticle(bullet.x, bullet.y, 5, [1, 1, 0, 1], 20);
-                    if (game.assets.sounds.hit) {
+                    if (userInteracted && game.assets.sounds.hit) {
                         const hitSound = game.assets.sounds.hit.cloneNode();
                         hitSound.volume = 0.3;
                         hitSound.play().catch(e => console.warn("Ошибка воспроизведения звука:", e));
@@ -897,7 +910,7 @@
                     if (distance < enemy.size) {
                         enemy.health -= bullet.damage;
                         createParticle(bullet.x, bullet.y, 10, [1, 0, 0, 1], 30);
-                        if (game.assets.sounds.hit) {
+                        if (userInteracted && game.assets.sounds.hit) {
                             const hitSound = game.assets.sounds.hit.cloneNode();
                             hitSound.volume = 0.5;
                             hitSound.play().catch(e => console.warn("Ошибка воспроизведения звука:", e));
@@ -905,7 +918,7 @@
                         game.bullets.splice(i, 1);
                         
                         if (enemy.health <= 0) {
-                            if (game.assets.sounds.enemyDeath) {
+                            if (userInteracted && game.assets.sounds.enemyDeath) {
                                 const deathSound = game.assets.sounds.enemyDeath.cloneNode();
                                 deathSound.volume = 0.7;
                                 deathSound.play().catch(e => console.warn("Ошибка воспроизведения звука:", e));
@@ -927,7 +940,7 @@
                 particle.life -= deltaTime / particle.maxLife;
                 if (particle.life <= 0) game.particles.splice(i, 1);
             }
-            if (game.particles.length > 100) game.particles.splice(0, game.particles.length - 100);
+            if (game.particles.length > 50) game.particles.splice(0, game.particles.length - 50); // Ограничим частицы
         }
 
         function createParticle(x, y, count, color, maxLife) {
@@ -958,7 +971,7 @@
             weapon.lastShot = now;
             weapon.ammo--;
             
-            if (game.assets.sounds.shot) {
+            if (userInteracted && game.assets.sounds.shot) {
                 const shotSound = game.assets.sounds.shot.cloneNode();
                 shotSound.play().catch(e => console.warn("Ошибка воспроизведения звука:", e));
             }
@@ -985,7 +998,7 @@
             if (weapon.isReloading || weapon.ammo === weapon.maxAmmo || weapon.totalAmmo <= 0) return;
             
             weapon.isReloading = true;
-            if (game.assets.sounds.reload) {
+            if (userInteracted && game.assets.sounds.reload) {
                 const reloadSound = game.assets.sounds.reload.cloneNode();
                 reloadSound.play().catch(e => console.warn("Ошибка воспроизведения звука:", e));
             }
@@ -1098,7 +1111,7 @@
         function draw3DView() {
             const fov = Math.PI / 3;
             const halfFov = fov / 2;
-            const rayStep = 1;
+            const rayStep = 4; // Увеличиваем шаг для оптимизации
             const numRays = Math.floor(canvas.width / rayStep);
             const rayAngleStep = fov / numRays;
 
@@ -1157,7 +1170,7 @@
             const y1 = (drawStart / canvas.height) * 2 - 1;
             const y2 = (drawEnd / canvas.height) * 2 - 1;
 
-            drawQuad(x1, y1, x2, y2, texX, 0, texX + (1 / 32), 1, game.assets.textures.wall, wallDist, [1, 1, 1, 1]);
+            drawQuad(x1, y1, x2, y2, texX, 0, texX + (1 / 32), 1, game.assets.textures.wall || fallbackTextures.wall, wallDist, [1, 1, 1, 1]);
 
             for (let x = column; x < column + rayStep; x++) {
                 if (x >= 0 && x < game.zBuffer.length) game.zBuffer[x] = wallDist;
@@ -1169,7 +1182,8 @@
             const x1 = (column / canvas.width) * 2 - 1;
             const x2 = ((column + rayStep) / canvas.width) * 2 - 1;
 
-            for (let y = horizon; y < canvas.height; y += 2) {
+            // Пол
+            for (let y = horizon; y < canvas.height; y += 8) { // Увеличиваем шаг для оптимизации
                 const currentDist = canvas.height / (2.0 * y - canvas.height);
                 const weight = currentDist / 100;
                 const currentFloorX = weight * (game.player.x + Math.cos(angle) * 100) + (1.0 - weight) * game.player.x;
@@ -1178,12 +1192,13 @@
                 const floorTexY = currentFloorY * 32 % 32 / 32;
 
                 const y1 = (y / canvas.height) * 2 - 1;
-                const y2 = ((y + 2) / canvas.height) * 2 - 1;
+                const y2 = ((y + 8) / canvas.height) * 2 - 1;
 
-                drawQuad(x1, y1, x2, y2, floorTexX, floorTexY, floorTexX + (1 / 32), floorTexY + (1 / 32), game.assets.textures.floor, currentDist, [1, 1, 1, 1]);
+                drawQuad(x1, y1, x2, y2, floorTexX, floorTexY, floorTexX + (1 / 32), floorTexY + (1 / 32), game.assets.textures.floor || fallbackTextures.floor, currentDist, [1, 1, 1, 1]);
             }
 
-            for (let y = 0; y < horizon; y += 2) {
+            // Потолок
+            for (let y = 0; y < horizon; y += 8) { // Увеличиваем шаг для оптимизации
                 const currentDist = canvas.height / (canvas.height - 2.0 * y);
                 const weight = currentDist / 100;
                 const currentCeilingX = weight * (game.player.x + Math.cos(angle) * 100) + (1.0 - weight) * game.player.x;
@@ -1192,9 +1207,9 @@
                 const ceilingTexY = currentCeilingY * 32 % 32 / 32;
 
                 const y1 = (y / canvas.height) * 2 - 1;
-                const y2 = ((y + 2) / canvas.height) * 2 - 1;
+                const y2 = ((y + 8) / canvas.height) * 2 - 1;
 
-                drawQuad(x1, y1, x2, y2, ceilingTexX, ceilingTexY, ceilingTexX + (1 / 32), ceilingTexY + (1 / 32), game.assets.textures.ceiling, currentDist, [1, 1, 1, 1]);
+                drawQuad(x1, y1, x2, y2, ceilingTexX, ceilingTexY, ceilingTexX + (1 / 32), ceilingTexY + (1 / 32), game.assets.textures.ceiling || fallbackTextures.ceiling, currentDist, [1, 1, 1, 1]);
             }
         }
 
@@ -1229,7 +1244,7 @@
                 const y1 = (screenY / canvas.height) * 2 - 1;
                 const y2 = ((screenY + enemyHeight) / canvas.height) * 2 - 1;
 
-                drawQuad(x1, y1, x2, y2, 0, 0, 1, 1, game.assets.textures.enemy, distance, [1, 1, 1, 1]);
+                drawQuad(x1, y1, x2, y2, 0, 0, 1, 1, game.assets.textures.enemy || fallbackTextures.enemy, distance, [1, 1, 1, 1]);
             }
         }
 
@@ -1262,7 +1277,7 @@
             gl.bufferData(gl.ARRAY_BUFFER, lives, gl.STATIC_DRAW);
 
             gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, game.assets.textures.particle);
+            gl.bindTexture(gl.TEXTURE_2D, game.assets.textures.particle || fallbackTextures.particle);
             gl.uniform1i(particleTextureLocation, 0);
             gl.uniform1f(pointSizeLocation, 10.0);
 
@@ -1294,6 +1309,7 @@
         }
 
         function drawHUD() {
+            if (!hudCtx) return;
             hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
             const weapon = game.player.weapons[game.player.currentWeapon];
             const now = Date.now();
