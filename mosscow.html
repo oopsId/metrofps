@@ -427,48 +427,36 @@
         }
         
         function setupEventListeners() {
-            window.addEventListener('keydown', (e) => {
-                game.keys[e.key] = true;
-                if (e.key === '1') {
-                    game.player.currentWeapon = 0;
-                    updateWeaponDisplay();
-                } else if (e.key === '2') {
-                    game.player.currentWeapon = 1;
-                    updateWeaponDisplay();
-                } else if (e.key === 'r') {
-                    reloadWeapon();
-                }
-            });
-            
-            window.addEventListener('keyup', (e) => {
-                game.keys[e.key] = false;
-            });
-            
-            canvas.addEventListener('mousemove', (e) => {
-                game.mouse.x = e.clientX;
-                game.mouse.y = e.clientY;
-                if (game.mouse.isDown) {
-                    const centerX = canvas.width / 2;
-                    const deltaX = game.mouse.x - centerX;
-                    game.player.angle += deltaX * 0.005;
-                }
-            });
-            
-            canvas.addEventListener('mousedown', (e) => {
-                game.mouse.isDown = true;
-                canvas.requestPointerLock();
-            });
-            
-            canvas.addEventListener('mouseup', (e) => {
-                game.mouse.isDown = false;
-            });
-            
-            canvas.addEventListener('click', (e) => {
-                if (!game.mouse.isDown) {
-                    shoot();
-                }
-            });
+    window.addEventListener('keydown', (e) => {
+        game.keys[e.key.toLowerCase()] = true; // Приводим к нижнему регистру
+        if (e.key === '1') { game.player.currentWeapon = 0; updateWeaponDisplay(); }
+        else if (e.key === '2') { game.player.currentWeapon = 1; updateWeaponDisplay(); }
+        else if (e.key.toLowerCase() === 'r') reloadWeapon();
+    });
+    window.addEventListener('keyup', (e) => {
+        game.keys[e.key.toLowerCase()] = false;
+    });
+    canvas.addEventListener('mousemove', (e) => {
+        game.mouse.x = e.clientX;
+        game.mouse.y = e.clientY;
+        if (game.mouse.isDown) {
+            const centerX = canvas.width / 2;
+            game.player.angle += (game.mouse.x - centerX) * 0.005;
         }
+    });
+    canvas.addEventListener('mousedown', () => {
+        game.mouse.isDown = true;
+        canvas.requestPointerLock();
+    });
+    canvas.addEventListener('mouseup', () => game.mouse.isDown = false);
+    canvas.addEventListener('click', () => {
+        if (!game.soundsEnabled) {
+            game.soundsEnabled = true;
+            showMessage("Sound enabled!");
+        }
+        if (!game.mouse.isDown) shoot();
+    });
+}
         
         function loadAssets() {
             const textures = [
@@ -523,53 +511,52 @@
             }
         }
         
-       function gameLoop(timestamp) {
-    if (game.isGameOver || game.isGameWon) {
-        return;
-    }
-    
-    const deltaTime = timestamp - game.lastTime;
+      function gameLoop(timestamp) {
+    if (game.isGameOver || game.isGameWon) return;
+    const deltaTime = Math.min(timestamp - game.lastTime, 100); // Ограничение до 100 мс
     game.lastTime = timestamp;
-    
     console.time('update');
     update(deltaTime);
     console.timeEnd('update');
-    
     console.time('render');
     render();
     console.timeEnd('render');
-    
     requestAnimationFrame(gameLoop);
 }
         
         function update(deltaTime) {
-            const moveSpeed = game.player.moveSpeed * (deltaTime / 16);
-            const rotateSpeed = game.player.rotateSpeed * (deltaTime / 16);
-            
-            if (game.keys['w'] || game.keys['ArrowUp']) {
-                movePlayer(moveSpeed);
-            }
-            if (game.keys['s'] || game.keys['ArrowDown']) {
-                movePlayer(-moveSpeed * 0.7);
-            }
-            if (game.keys['a'] || game.keys['ArrowLeft']) {
-                game.player.angle -= rotateSpeed;
-            }
-            if (game.keys['d'] || game.keys['ArrowRight']) {
-                game.player.angle += rotateSpeed;
-            }
-            
-            if (game.keys['q']) {
-                strafePlayer(-moveSpeed * 0.7);
-            }
-            if (game.keys['e']) {
-                strafePlayer(moveSpeed * 0.7);
-            }
-            
-            updateBullets(deltaTime);
-            updateEnemies(deltaTime);
-            updateParticles(deltaTime);
-        }
+    const moveSpeed = game.player.moveSpeed * (deltaTime / 16);
+    const rotateSpeed = game.player.rotateSpeed * (deltaTime / 16);
+
+    if (game.keys['w'] || game.keys['ArrowUp']) {
+        console.log("W pressed, moving forward");
+        movePlayer(moveSpeed);
+    }
+    if (game.keys['s'] || game.keys['ArrowDown']) {
+        console.log("S pressed, moving backward");
+        movePlayer(-moveSpeed * 0.7);
+    }
+    if (game.keys['a'] || game.keys['ArrowLeft']) {
+        console.log("A pressed, rotating left");
+        game.player.angle -= rotateSpeed;
+    }
+    if (game.keys['d'] || game.keys['ArrowRight']) {
+        console.log("D pressed, rotating right");
+        game.player.angle += rotateSpeed;
+    }
+    if (game.keys['q']) {
+        console.log("Q pressed, strafing left");
+        strafePlayer(-moveSpeed * 0.7);
+    }
+    if (game.keys['e']) {
+        console.log("E pressed, strafing right");
+        strafePlayer(moveSpeed * 0.7);
+    }
+
+    updateBullets(deltaTime);
+    updateEnemies(deltaTime);
+    updateParticles(deltaTime);
+}
         
         function movePlayer(speed) {
             const newX = game.player.x + Math.cos(game.player.angle) * speed;
@@ -642,7 +629,7 @@
                     
                     if (distance < enemy.size) {
                         enemy.health -= bullet.damage;
-                        createParticle(bullet.x, bullet.y, 10, '#f00', 30);
+                        createParticle(bullet.x, bullet.y, 5, '#f00', 20);
                         if (game.assets.sounds.hit) {
                             game.assets.sounds.hit.currentTime = 0;
                             game.assets.sounds.hit.play();
@@ -702,17 +689,16 @@
             }
         }
         
-        function updateParticles(deltaTime) {
-            for (let i = game.particles.length - 1; i >= 0; i--) {
-                const particle = game.particles[i];
-                particle.x += Math.cos(particle.angle) * particle.speed * (deltaTime / 16);
-                particle.y += Math.sin(particle.angle) * particle.speed * (deltaTime / 16);
-                particle.life -= deltaTime;
-                if (particle.life <= 0) {
-                    game.particles.splice(i, 1);
-                }
-            }
-        }
+       function updateParticles(deltaTime) {
+    for (let i = game.particles.length - 1; i >= 0; i--) {
+        const particle = game.particles[i];
+        particle.x += Math.cos(particle.angle) * particle.speed * (deltaTime / 16);
+        particle.y += Math.sin(particle.angle) * particle.speed * (deltaTime / 16);
+        particle.life -= deltaTime;
+        if (particle.life <= 0) game.particles.splice(i, 1);
+    }
+    if (game.particles.length > 50) game.particles.splice(0, game.particles.length - 50); // Ограничение частиц
+}
         
         function createParticle(x, y, count, color, life) {
             for (let i = 0; i < count; i++) {
@@ -760,7 +746,7 @@
             createParticle(
                 game.player.x + Math.cos(game.player.angle) * 0.5,
                 game.player.y + Math.sin(game.player.angle) * 0.5,
-                3, '#ff0', 10
+                2, '#ff0', 10
             );
             
             updateAmmoDisplay();
