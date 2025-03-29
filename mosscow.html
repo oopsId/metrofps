@@ -472,18 +472,17 @@
         
         function loadAssets() {
             const textures = [
-                 { name: 'wall', url: './assets/textures/wall.png' },
-                 { name: 'floor', url: './assets/textures/floor.png' },
-                 { name: 'ceiling', url: './assets/textures/ceiling.png' },
-                 { name: 'enemy', url: './assets/textures/enemy.png' }
-             ];
-            
+                { name: 'wall', url: '/metrofps/assets/textures/wall.png' },
+                { name: 'floor', url: '/metrofps/assets/textures/floor.png' },
+                { name: 'ceiling', url: '/metrofps/assets/textures/ceiling.png' },
+                { name: 'enemy', url: '/metrofps/assets/textures/enemy.png' }
+            ];
             const sounds = [
-                { name: 'shot', url: './assets/sfx/gun-shot-1680.mp3' },
-                { name: 'reload', url: './assets/sfx/gun-reload-1910.mp3' },
-                { name: 'hit', url: './assets/sfx/arrow-whoosh-1491.mp3' },
-                { name: 'enemyDeath', url: './assets/sfx/ominous-drums-227.mp3' },
-                { name: 'playerHurt', url: './assets/sfx/player-jumping-1929.mp3' }
+                { name: 'shot', url: '/metrofps/assets/sfx/gun-shot-1680.mp3' },
+                { name: 'reload', url: '/metrofps/assets/sfx/gun-reload-1910.mp3' },
+                { name: 'hit', url: '/metrofps/assets/sfx/arrow-whoosh-1491.mp3' },
+                { name: 'enemyDeath', url: '/metrofps/assets/sfx/ominous-drums-227.mp3' },
+                { name: 'playerHurt', url: '/metrofps/assets/sfx/player-jumping-1929.mp3' }
             ];
             
             game.totalAssets = textures.length + sounds.length;
