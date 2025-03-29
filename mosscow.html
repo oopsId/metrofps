@@ -514,6 +514,7 @@
         }
         
         // Load game assets
+        // Load game assets
         function loadAssets() {
             // Texture assets to load
             const textures = [
@@ -544,22 +545,19 @@
                 img.src = texture.url;
             });
             
-           sounds.forEach(sound => {
-         const audio = new Audio();
-         audio.onload = () => assetLoaded();
-         audio.onerror = () => {
-        console.error("Ошибка загрузки звука:", sound.url);
-        assetLoaded();
-          };
-       // Если у вас есть альтернативный URL, можно прописать условие или сразу установить другой URL:
-        audio.src = sound.url;
-        game.assets.sounds[sound.name] = audio;
-       // Можно вызывать assetLoaded() здесь, если не ждём события oncanplaythrough
-         });
+            sounds.forEach(sound => {
+                const audio = new Audio();
+                audio.onload = () => assetLoaded();
+                audio.onerror = () => {
+                    console.error("Ошибка загрузки звука:", sound.url);
+                    assetLoaded();
+                };
+                audio.src = sound.url;
+                game.assets.sounds[sound.name] = audio;
+            });
 
-        
-        // Track loaded assets
-        function assetLoaded() {
+            // Track loaded assets
+            function assetLoaded() {
                 game.assetsLoaded++;
                 const progress = Math.floor((game.assetsLoaded / game.totalAssets) * 100);
                 loadingProgress.style.width = `${progress}%`;
@@ -571,6 +569,7 @@
                     }, 500);
                 }
             }
+        } // Добавлена закрывающая скобка для loadAssets()
         
         // Game loop
         function gameLoop(timestamp) {
