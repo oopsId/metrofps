@@ -878,17 +878,17 @@
 }
         
         function draw3DView() {
-            const fov = Math.PI / 3;
-            const halfFov = fov / 2;
-            const rayStep = 4;
-            const numRays = Math.floor(canvas.width / rayStep);
-            const rayAngleStep = fov / numRays;
-            for (let i = 0; i < numRays; i++) {
-                const rayAngle = game.player.angle - halfFov + i * rayAngleStep;
-                castRay(rayAngle, i * rayStep, rayStep);
-            }
-            drawEnemies();
-        }
+    const fov = Math.PI / 3;
+    const halfFov = fov / 2;
+    const rayStep = 8; // Увеличиваем шаг лучей для оптимизации
+    const numRays = Math.floor(canvas.width / rayStep);
+    const rayAngleStep = fov / numRays;
+    for (let i = 0; i < numRays; i++) {
+        const rayAngle = game.player.angle - halfFov + i * rayAngleStep;
+        castRay(rayAngle, i * rayStep, rayStep);
+    }
+    drawEnemies();
+    }
         
         function castRay(angle, column, rayStep) {
             let rayX = game.player.x, rayY = game.player.y;
@@ -940,7 +940,7 @@
             drawFloorAndCeiling(column, drawStart, drawEnd, angle, wallDist);
         }
         
-       function drawFloorAndCeiling(column, wallTop, wallBottom, angle, wallDist) {
+      function drawFloorAndCeiling(column, wallTop, wallBottom, angle, wallDist) {
     const rayStep = 8; // Соответствует шагу лучей
     const horizon = canvas.height / 2;
     const yStep = 2; // Рисуем пол и потолок с шагом 2 пикселя по вертикали
