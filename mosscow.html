@@ -479,8 +479,13 @@
                 const img = new Image();
                 img.onload = () => {
                     game.assets.textures[texture.name] = img;
+                    console.log(`Текстура ${texture.name} загружена`);
                     assetLoaded();
                 };
+                img.onerror = () => {
+                console.error(`Ошибка загрузки текстуры ${texture.name} по пути ${texture.url}`);
+                assetLoaded();
+        };   
                 img.src = texture.url;
             });
             
