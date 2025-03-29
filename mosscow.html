@@ -872,108 +872,67 @@
        function draw3DView() {
        const fov = Math.PI / 3;
        const halfFov = fov / 2;
-       const rayStep = 4;
+       const rayStep = 4; // Шаг между лучами
        const numRays = Math.floor(canvas.width / rayStep);
        const rayAngleStep = fov / numRays;
-    
         for (let i = 0; i < numRays; i++) {
         const rayAngle = game.player.angle - halfFov + i * rayAngleStep;
-        castRay(rayAngle, i * rayStep);
-        }
-    
-    drawEnemies();
-     }
+        castRay(rayAngle, i * rayStep, rayStep); // Передаем rayStep как параметр
+       }
+        drawEnemies();
+             }
         
-       function castRay(angle, column) {
-    let rayX = game.player.x;
-    let rayY = game.player.y;
-    const rayDirX = Math.cos(angle);
-    const rayDirY = Math.sin(angle);
-    
+      function castRay(angle, column, rayStep) {
+    let rayX = game.player.x, rayY = game.player.y;
+    const rayDirX = Math.cos(angle), rayDirY = Math.sin(angle);
     let sideDistX, sideDistY;
-    const deltaDistX = Math.abs(1 / rayDirX);
-    const deltaDistY = Math.abs(1 / rayDirY);
-    
-    let stepX, stepY;
-    let mapX = Math.floor(rayX);
-    let mapY = Math.floor(rayY);
-    
-    if (rayDirX < 0) {
-        stepX = -1;
-        sideDistX = (game.player.x - mapX) * deltaDistX;
-    } else {
-        stepX = 1;
-        sideDistX = (mapX + 1.0 - game.player.x) * deltaDistX;
-    }
-    
-    if (rayDirY < 0) {
-        stepY = -1;
-        sideDistY = (game.player.y - mapY) * deltaDistY;
-    } else {
-        stepY = 1;
-        sideDistY = (mapY + 1.0 - game.player.y) * deltaDistY;
-    }
-    
-    let hit = false;
-    let side;
-    let wallDist;
-    
+    const deltaDistX = Math.abs(1 / rayDirX) || 1e10, deltaDistY = Math.abs(1 / rayDirY) || 1e10;
+    let stepX, stepY, mapX = Math.floor(rayX), mapY = Math.floor(rayY);
+    if (rayDirX < 0) { stepX = -1; sideDistX = (game.player.x - mapX) * deltaDistX; }
+    else { stepX = 1; sideDistX = (mapX + 1.0 - game.player.x) * deltaDistX; }
+    if (rayDirY < 0) { stepY = -1; sideDistY = (game.player.y - mapY) * deltaDistY; }
+    else { stepY = 1; sideDistY = (mapY + 1.0 - game.player.y) * deltaDistY; }
+    let hit = false, side, wallDist;
     while (!hit) {
-        if (sideDistX < sideDistY) {
-            sideDistX += deltaDistX;
-            mapX += stepX;
-            side = 0;
-        } else {
-            sideDistY += deltaDistY;
-            mapY += stepY;
-            side = 1;
-        }
-        
-        if (mapX < 0 || mapX >= game.map.width || mapY < 0 || mapY >= game.map.height) {
+        if (sideDistX < sideDistY) { sideDistX += deltaDistX; mapX += stepX; side = 0; }
+        else { sideDistY += deltaDistY; mapY += stepY; side = 1; }
+        if (mapX < 0 || mapX >= game.map.width || mapY < 0 || mapY >= game.map.height) { hit = true; wallDist = 100; }
+        else if (game.map.grid[mapY][mapX] === 1) {
             hit = true;
-            wallDist = 100; // Далеко за пределами
-        } else if (game.map.grid[mapY][mapX] === 1) {
-            hit = true;
-            if (side === 0) {
-                wallDist = (mapX - game.player.x + (1 - stepX) / 2) / rayDirX;
-            } else {
-                wallDist = (mapY - game.player.y + (1 - stepY) / 2) / rayDirY;
-            }
+            wallDist = side === 0 ? (mapX - game.player.x + (1 - stepX) / 2) / rayDirX : (mapY - game.player.y + (1 - stepY) / 2) / rayDirY;
         }
     }
-    
-    // Защита от NaN в wallDist
-    if (isNaN(wallDist) || wallDist <= 0) {
-        wallDist = 100; // Запасное значение для бесконечной дистанции
-    }
-    
+    if (isNaN(wallDist) || wallDist <= 0) wallDist = 100;
     const lineHeight = Math.floor(canvas.height / (wallDist + 0.0001));
-    let drawStart = -lineHeight / 2 + canvas.height / 2;
-    if (drawStart < 0) drawStart = 0;
-    let drawEnd = lineHeight / 2 + canvas.height / 2;
-    if (drawEnd >= canvas.height) drawEnd = canvas.height - 1;
-    
-    let color;
-    if (side === 1) {
-        color = '#666';
+    let drawStart = -lineHeight / 2 + canvas.height / 2; if (drawStart < 0) drawStart = 0;
+    let drawEnd = lineHeight / 2 + canvas.height / 2; if (drawEnd >= canvas.height) drawEnd = canvas.height - 1;
+
+    let wallX;
+    if (side === 0) wallX = game.player.y + wallDist * rayDirY;
+    else wallX = game.player.x + wallDist * rayDirX;
+    wallX -= Math.floor(wallX);
+
+    const texWidth = game.assets.textures.wall ? game.assets.textures.wall.width : 64;
+    const texX = Math.floor(wallX * texWidth);
+
+    if (game.assets.textures.wall) {
+        ctx.drawImage(
+            game.assets.textures.wall,
+            texX, 0, 1, game.assets.textures.wall.height,
+            column, drawStart, rayStep, drawEnd - drawStart
+        );
     } else {
-        color = '#888';
+        let color = side === 1 ? '#666' : '#888';
+        const shade = 1.0 - Math.min(wallDist / 15, 0.9);
+        const r = Math.floor(parseInt(color.substr(1, 2), 16) * shade);
+        const g = Math.floor(parseInt(color.substr(3, 2), 16) * shade);
+        const b = Math.floor(parseInt(color.substr(5, 2), 16) * shade);
+        const safeR = isNaN(r) ? 100 : r, safeG = isNaN(g) ? 100 : g, safeB = isNaN(b) ? 100 : b;
+        color = `rgb(${safeR},${safeG},${safeB})`;
+        ctx.fillStyle = color;
+        ctx.fillRect(column, drawStart, rayStep, drawEnd - drawStart);
     }
-    
-    const shade = 1.0 - Math.min(wallDist / 15, 0.9);
-    const r = Math.floor(parseInt(color.substr(1, 2), 16) * shade);
-    const g = Math.floor(parseInt(color.substr(3, 2), 16) * shade);
-    const b = Math.floor(parseInt(color.substr(5, 2), 16) * shade);
-    
-    // Дополнительная защита от NaN
-    const safeR = isNaN(r) ? 100 : r;
-    const safeG = isNaN(g) ? 100 : g;
-    const safeB = isNaN(b) ? 100 : b;
-    
-    color = `rgb(${safeR},${safeG},${safeB})`;
-    ctx.fillStyle = color;
-    ctx.fillRect(column, drawStart, rayStep, drawEnd - drawStart);
-    
+
     if (game.assets.textures.floor && game.assets.textures.ceiling) {
         drawFloorAndCeiling(column, drawEnd, angle, wallDist);
     }
