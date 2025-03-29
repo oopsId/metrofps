@@ -524,18 +524,24 @@
             }
         }
         
-        function gameLoop(timestamp) {
-            if (game.isGameOver || game.isGameWon) {
-                return;
-            }
-            
-            const deltaTime = timestamp - game.lastTime;
-            game.lastTime = timestamp;
-            
-            update(deltaTime);
-            render();
-            requestAnimationFrame(gameLoop);
-        }
+       function gameLoop(timestamp) {
+    if (game.isGameOver || game.isGameWon) {
+        return;
+    }
+    
+    const deltaTime = timestamp - game.lastTime;
+    game.lastTime = timestamp;
+    
+    console.time('update');
+    update(deltaTime);
+    console.timeEnd('update');
+    
+    console.time('render');
+    render();
+    console.timeEnd('render');
+    
+    requestAnimationFrame(gameLoop);
+}
         
         function update(deltaTime) {
             const moveSpeed = game.player.moveSpeed * (deltaTime / 16);
