@@ -321,8 +321,8 @@
                 rotateSpeed: 0.05
             },
             map: {
-                width: 32,
-                height: 32,
+                width: 16,
+                height: 16,
                 grid: [],
                 stations: [
                     { name: "Mayakovskaya", x: 5, y: 5 },
@@ -427,39 +427,39 @@
             stationNameDisplay.textContent = station.name;
         }
         
-        function spawnEnemies() {
-            game.enemies = [];
-            const station = game.map.stations[game.map.currentStation];
-            const enemyCount = 5 + game.map.currentStation * 2;
-            
-            for (let i = 0; i < enemyCount; i++) {
-                let x, y, validPosition = false, attempts = 0;
-                while (!validPosition && attempts < 50) {
-                    attempts++;
-                    x = Math.floor(Math.random() * (game.map.width - 4)) + 2;
-                    y = Math.floor(Math.random() * (game.map.height - 4)) + 2;
-                    if (game.map.grid[y][x] === 0) {
-                        const dx = x - game.player.x;
-                        const dy = y - game.player.y;
-                        const distance = Math.sqrt(dx*dx + dy*dy);
-                        if (distance > 5) validPosition = true;
-                    }
-                }
-                if (validPosition) {
-                    game.enemies.push({
-                        x: x + 0.5,
-                        y: y + 0.5,
-                        health: 50 + game.map.currentStation * 10,
-                        maxHealth: 50 + game.map.currentStation * 10,
-                        speed: 0.02 + game.map.currentStation * 0.005,
-                        damage: 10 + game.map.currentStation * 2,
-                        attackCooldown: 1000,
-                        lastAttack: 0,
-                        size: 0.4
-                    });
-                }
+       function spawnEnemies() {
+    game.enemies = [];
+    const station = game.map.stations[game.map.currentStation];
+    const enemyCount = 3 + game.map.currentStation; // Уменьшаем количество врагов
+    
+    for (let i = 0; i < enemyCount; i++) {
+        let x, y, validPosition = false, attempts = 0;
+        while (!validPosition && attempts < 50) {
+            attempts++;
+            x = Math.floor(Math.random() * (game.map.width - 4)) + 2;
+            y = Math.floor(Math.random() * (game.map.height - 4)) + 2;
+            if (game.map.grid[y][x] === 0) {
+                const dx = x - game.player.x;
+                const dy = y - game.player.y;
+                const distance = Math.sqrt(dx*dx + dy*dy);
+                if (distance > 3) validPosition = true; // Уменьшаем минимальное расстояние
             }
         }
+        if (validPosition) {
+            game.enemies.push({
+                x: x + 0.5,
+                y: y + 0.5,
+                health: 50 + game.map.currentStation * 10,
+                maxHealth: 50 + game.map.currentStation * 10,
+                speed: 0.02 + game.map.currentStation * 0.005,
+                damage: 10 + game.map.currentStation * 2,
+                attackCooldown: 1000,
+                lastAttack: 0,
+                size: 0.4
+            });
+        }
+    }
+}
         
         function setupEventListeners() {
             window.addEventListener('keydown', (e) => {
@@ -880,7 +880,7 @@
         function draw3DView() {
     const fov = Math.PI / 3;
     const halfFov = fov / 2;
-    const rayStep = 8; // Увеличиваем шаг лучей для оптимизации
+    const rayStep = 16; // Увеличиваем шаг лучей
     const numRays = Math.floor(canvas.width / rayStep);
     const rayAngleStep = fov / numRays;
     for (let i = 0; i < numRays; i++) {
@@ -888,7 +888,7 @@
         castRay(rayAngle, i * rayStep, rayStep);
     }
     drawEnemies();
-    }
+}
         
         function castRay(angle, column, rayStep) {
             let rayX = game.player.x, rayY = game.player.y;
@@ -940,12 +940,11 @@
             drawFloorAndCeiling(column, drawStart, drawEnd, angle, wallDist);
         }
         
-      function drawFloorAndCeiling(column, wallTop, wallBottom, angle, wallDist) {
-    const rayStep = 8; // Соответствует шагу лучей
+     function drawFloorAndCeiling(column, wallTop, wallBottom, angle, wallDist) {
+    const rayStep = 16; // Соответствует шагу лучей
     const horizon = canvas.height / 2;
-    const yStep = 2; // Рисуем пол и потолок с шагом 2 пикселя по вертикали
+    const yStep = 4; // Увеличиваем шаг по вертикали
 
-    // Рисуем пол от горизонта до низа экрана
     for (let y = horizon; y < canvas.height; y += yStep) {
         const currentDist = canvas.height / (2.0 * y - canvas.height);
         const weight = currentDist / wallDist;
@@ -960,7 +959,6 @@
         );
     }
 
-    // Рисуем потолок от верха экрана до горизонта
     for (let y = 0; y < horizon; y += yStep) {
         const currentDist = canvas.height / (canvas.height - 2.0 * y);
         const weight = currentDist / wallDist;
@@ -976,7 +974,7 @@
     }
 }
         
-    function drawEnemies() {
+   function drawEnemies() {
     const sortedEnemies = [...game.enemies].sort((a, b) => {
         const distA = Math.sqrt(Math.pow(a.x - game.player.x, 2) + Math.pow(a.y - game.player.y, 2));
         const distB = Math.sqrt(Math.pow(b.x - game.player.x, 2) + Math.pow(b.y - game.player.y, 2));
@@ -1001,18 +999,9 @@ function drawEnemy(enemy) {
     const screenX = (angle + fov/2) / fov * canvas.width - enemyWidth/2;
     const screenY = canvas.height/2 - enemyHeight/2;
     
-    // Проверяем видимость через zBuffer с шагом
-    const columnStart = Math.floor(screenX);
-    const columnEnd = Math.ceil(screenX + enemyWidth);
-    const step = Math.max(1, Math.floor(enemyWidth / 10)); // Проверяем каждые 10% ширины врага
-    let visible = false;
-    for (let x = columnStart; x < columnEnd; x += step) {
-        if (x >= 0 && x < game.zBuffer.length && distance < game.zBuffer[x]) {
-            visible = true;
-            break;
-        }
-    }
-    if (!visible) return;
+    // Проверяем видимость только в центре врага
+    const centerX = Math.floor(screenX + enemyWidth/2);
+    if (centerX >= 0 && centerX < game.zBuffer.length && distance >= game.zBuffer[centerX]) return;
     
     ctx.drawImage(
         game.assets.textures.enemy,
@@ -1028,8 +1017,8 @@ function drawEnemy(enemy) {
     ctx.fillStyle = '#f00';
     ctx.fillRect(screenX + enemyWidth * 0.1, screenY - 10, healthBarWidth * healthPercent, healthBarHeight);
 }
-        
-        function drawParticles() {
+
+function drawParticles() {
     for (const particle of game.particles) {
         const dx = particle.x - game.player.x;
         const dy = particle.y - game.player.y;
@@ -1046,7 +1035,7 @@ function drawEnemy(enemy) {
         const screenX = (normalizedAngle + fov/2) / fov * canvas.width - particleSize/2;
         const screenY = canvas.height/2 - particleSize/2;
         
-        // Проверяем видимость через zBuffer только в центре частицы
+        // Проверяем видимость только в центре частицы
         const centerX = Math.floor(screenX + particleSize/2);
         if (centerX >= 0 && centerX < game.zBuffer.length && distance >= game.zBuffer[centerX]) continue;
         
