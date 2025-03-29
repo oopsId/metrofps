@@ -375,57 +375,65 @@
         }
         
         function generateMap() {
-            game.map.grid = [];
-            for (let y = 0; y < game.map.height; y++) {
-                game.map.grid[y] = [];
-                for (let x = 0; x < game.map.width; x++) {
-                    if (x === 0 || y === 0 || x === game.map.width - 1 || y === game.map.height - 1) {
-                        game.map.grid[y][x] = 1;
-                    } else {
-                        game.map.grid[y][x] = 0;
-                    }
-                }
+    game.map.grid = [];
+    for (let y = 0; y < game.map.height; y++) {
+        game.map.grid[y] = [];
+        for (let x = 0; x < game.map.width; x++) {
+            if (x === 0 || y === 0 || x === game.map.width - 1 || y === game.map.height - 1) {
+                game.map.grid[y][x] = 1; // Внешние стены
+            } else {
+                game.map.grid[y][x] = 0;
             }
-            
-            const station = game.map.stations[game.map.currentStation];
-            for (let y = station.y - 1; y <= station.y + 1; y++) {
-                for (let x = station.x - 1; x <= station.x + 1; x++) {
-                    if (x >= 0 && x < game.map.width && y >= 0 && y < game.map.height) {
-                        game.map.grid[y][x] = 0;
-                    }
-                }
-            }
-            
-            for (let y = station.y - 3; y <= station.y + 3; y++) {
-                for (let x = station.x - 3; x <= station.x + 3; x++) {
-                    if (x >= 0 && x < game.map.width && y >= 0 && y < game.map.height) {
-                        if (Math.abs(x - station.x) <= 1 && Math.abs(y - station.y) <= 1) continue;
-                        if (Math.random() < 0.4) {
-                            game.map.grid[y][x] = 1;
-                        }
-                    }
-                }
-            }
-            
-            for (let i = 0; i < 5; i++) {
-                const x = Math.floor(Math.random() * (game.map.width - 4)) + 2;
-                const y = Math.floor(Math.random() * (game.map.height - 4)) + 2;
-                if (Math.abs(x - station.x) > 1 || Math.abs(y - station.y) > 1) {
-                    game.map.grid[y][x] = 1;
-                    if (x + 1 < game.map.width - 1 && y + 1 < game.map.height - 1) {
-                        game.map.grid[y][x+1] = 1;
-                        game.map.grid[y+1][x] = 1;
-                        game.map.grid[y+1][x+1] = 1;
-                    }
-                }
-            }
-            
-            game.player.x = station.x + 0.5;
-            game.player.y = station.y + 0.5;
-            game.player.angle = Math.random() * Math.PI * 2;
-            spawnEnemies();
-            stationNameDisplay.textContent = station.name;
         }
+    }
+    
+    const station = game.map.stations[game.map.currentStation];
+    for (let y = station.y - 1; y <= station.y + 1; y++) {
+        for (let x = station.x - 1; x <= station.x + 1; x++) {
+            if (x >= 0 && x < game.map.width && y >= 0 && y < game.map.height) {
+                game.map.grid[y][x] = 0; // Очищаем место для станции
+            }
+        }
+    }
+    
+    // Добавляем внутренние перегородки
+    let wallCount = 0;
+    for (let y = station.y - 3; y <= station.y + 3; y++) {
+        for (let x = station.x - 3; x <= station.x + 3; x++) {
+            if (x >= 0 && x < game.map.width && y >= 0 && y < game.map.height) {
+                if (Math.abs(x - station.x) <= 1 && Math.abs(y - station.y) <= 1) continue;
+                if (Math.random() < 0.4) {
+                    game.map.grid[y][x] = 1;
+                    wallCount++;
+                }
+            }
+        }
+    }
+    console.log(`Добавлено ${wallCount} внутренних перегородок`);
+
+    // Добавляем колонны
+    let columnCount = 0;
+    for (let i = 0; i < 5; i++) {
+        const x = Math.floor(Math.random() * (game.map.width - 4)) + 2;
+        const y = Math.floor(Math.random() * (game.map.height - 4)) + 2;
+        if (Math.abs(x - station.x) > 1 || Math.abs(y - station.y) > 1) {
+            if (x + 1 < game.map.width - 1 && y + 1 < game.map.height - 1) {
+                game.map.grid[y][x] = 1;
+                game.map.grid[y][x+1] = 1;
+                game.map.grid[y+1][x] = 1;
+                game.map.grid[y+1][x+1] = 1;
+                columnCount++;
+            }
+        }
+    }
+    console.log(`Добавлено ${columnCount} колонн 2x2`);
+
+    game.player.x = station.x + 0.5;
+    game.player.y = station.y + 0.5;
+    game.player.angle = Math.random() * Math.PI * 2;
+    spawnEnemies();
+    stationNameDisplay.textContent = station.name;
+}
         
        function spawnEnemies() {
     game.enemies = [];
@@ -877,12 +885,21 @@
     ctx.fillText(`FPS: ${game.fps}`, 10, 20); // Должно быть видно
 }
         
-        function draw3DView() {
+      function draw3DView() {
     const fov = Math.PI / 3;
     const halfFov = fov / 2;
-    const rayStep = 16; // Увеличиваем шаг лучей
+    const rayStep = 16;
     const numRays = Math.floor(canvas.width / rayStep);
     const rayAngleStep = fov / numRays;
+
+    // Сначала рисуем пол и потолок для всех столбцов
+    for (let column = 0; column < canvas.width; column += rayStep) {
+        const i = Math.floor(column / rayStep);
+        const rayAngle = game.player.angle - halfFov + i * rayAngleStep;
+        drawFloorAndCeiling(column, 0, canvas.height, rayAngle, 100); // Используем максимальную дистанцию, если стены нет
+    }
+
+    // Затем отбрасываем лучи и рисуем стены
     for (let i = 0; i < numRays; i++) {
         const rayAngle = game.player.angle - halfFov + i * rayAngleStep;
         castRay(rayAngle, i * rayStep, rayStep);
@@ -940,11 +957,12 @@
             drawFloorAndCeiling(column, drawStart, drawEnd, angle, wallDist);
         }
         
-     function drawFloorAndCeiling(column, wallTop, wallBottom, angle, wallDist) {
-    const rayStep = 16; // Соответствует шагу лучей
+   function drawFloorAndCeiling(column, wallTop, wallBottom, angle, wallDist) {
+    const rayStep = 16;
     const horizon = canvas.height / 2;
-    const yStep = 4; // Увеличиваем шаг по вертикали
+    const yStep = 4;
 
+    // Рисуем пол от горизонта до низа экрана
     for (let y = horizon; y < canvas.height; y += yStep) {
         const currentDist = canvas.height / (2.0 * y - canvas.height);
         const weight = currentDist / wallDist;
@@ -959,6 +977,7 @@
         );
     }
 
+    // Рисуем потолок от верха экрана до горизонта
     for (let y = 0; y < horizon; y += yStep) {
         const currentDist = canvas.height / (canvas.height - 2.0 * y);
         const weight = currentDist / wallDist;
