@@ -1221,7 +1221,7 @@
             
             // Calculate distance and angle to enemy
             const distance = Math.sqrt(dx*dx + dy*dy);
-            const angle = Math.atan2(dy, dx) - game.player.angle;
+            let angle = Math.atan2(dy, dx) - game.player.angle;
             
             // Normalize angle to [-PI, PI]
             while (angle < -Math.PI) angle += 2 * Math.PI;
