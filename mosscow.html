@@ -363,6 +363,40 @@
             setupEventListeners();
             loadAssets();
         }
+
+function spawnEnemies() {
+            game.enemies = [];
+            const station = game.map.stations[game.map.currentStation];
+            const enemyCount = 2;
+            
+            for (let i = 0; i < enemyCount; i++) {
+                let x, y, validPosition = false, attempts = 0;
+                while (!validPosition && attempts < 50) {
+                    attempts++;
+                    x = Math.floor(Math.random() * (game.map.width - 4)) + 2;
+                    y = Math.floor(Math.random() * (game.map.height - 4)) + 2;
+                    if (game.map.grid[y][x] === 0) {
+                        const dx = x - game.player.x;
+                        const dy = y - game.player.y;
+                        const distance = Math.sqrt(dx*dx + dy*dy);
+                        if (distance > 2) validPosition = true;
+                    }
+                }
+                if (validPosition) {
+                    game.enemies.push({
+                        x: x + 0.5,
+                        y: y + 0.5,
+                        health: 50 + game.map.currentStation * 10,
+                        maxHealth: 50 + game.map.currentStation * 10,
+                        speed: 0.02 + game.map.currentStation * 0.005,
+                        damage: 10 + game.map.currentStation * 2,
+                        attackCooldown: 1000,
+                        lastAttack: 0,
+                        size: 0.4
+                    });
+                }
+            }
+        }
         
         function resizeCanvas() {
             canvas.width = window.innerWidth * 0.5; // Уменьшаем разрешение
@@ -1016,39 +1050,7 @@
             }
         }
         
-        function spawnEnemies() {
-            game.enemies = [];
-            const station = game.map.stations[game.map.currentStation];
-            const enemyCount = 2;
-            
-            for (let i = 0; i < enemyCount; i++) {
-                let x, y, validPosition = false, attempts = 0;
-                while (!validPosition && attempts < 50) {
-                    attempts++;
-                    x = Math.floor(Math.random() * (game.map.width - 4)) + 2;
-                    y = Math.floor(Math.random() * (game.map.height - 4)) + 2;
-                    if (game.map.grid[y][x] === 0) {
-                        const dx = x - game.player.x;
-                        const dy = y - game.player.y;
-                        const distance = Math.sqrt(dx*dx + dy*dy);
-                        if (distance > 2) validPosition = true;
-                    }
-                }
-                if (validPosition) {
-                    game.enemies.push({
-                        x: x + 0.5,
-                        y: y + 0.5,
-                        health: 50 + game.map.currentStation * 10,
-                        maxHealth: 50 + game.map.currentStation * 10,
-                        speed: 0.02 + game.map.currentStation * 0.005,
-                        damage: 10 + game.map.currentStation * 2,
-                        attackCooldown: 1000,
-                        lastAttack: 0,
-                        size: 0.4
-                    });
-                }
-            }
-        }
+        
         
         initGame();
     </script>
