@@ -19,10 +19,16 @@
             height: 100vh;
         }
         
-        #game-canvas {
-            display: block;
+        #game-canvas, #hud-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
+        }
+        
+        #hud-canvas {
+            pointer-events: none; /* Чтобы события мыши проходили на нижний канвас */
         }
         
         #hud {
@@ -200,6 +206,7 @@
 <body>
     <div id="game-container">
         <canvas id="game-canvas"></canvas>
+        <canvas id="hud-canvas"></canvas>
         
         <div id="hud">
             <div id="health-bar">
@@ -241,6 +248,10 @@
             alert('WebGL не поддерживается вашим браузером!');
             throw new Error('WebGL не поддерживается');
         }
+
+        // Инициализация 2D контекста для HUD
+        const hudCanvas = document.getElementById('hud-canvas');
+        const hudCtx = hudCanvas.getContext('2d');
 
         // Элементы HUD
         const healthFill = document.getElementById('health-fill');
@@ -342,7 +353,7 @@
                 rotateSpeed: 0.05
             },
             map: {
-                width: 16, // Увеличиваем карту до 16x16
+                width: 16,
                 height: 16,
                 grid: [],
                 stations: [
@@ -634,6 +645,12 @@
             canvas.height = window.innerHeight * 0.5;
             canvas.style.width = `${window.innerWidth}px`;
             canvas.style.height = `${window.innerHeight}px`;
+            
+            hudCanvas.width = window.innerWidth * 0.5;
+            hudCanvas.height = window.innerHeight * 0.5;
+            hudCanvas.style.width = `${window.innerWidth}px`;
+            hudCanvas.style.height = `${window.innerHeight}px`;
+
             game.zBuffer = new Array(canvas.width).fill(Infinity);
             gl.viewport(0, 0, canvas.width, canvas.height);
         }
@@ -1081,18 +1098,16 @@
         function draw3DView() {
             const fov = Math.PI / 3;
             const halfFov = fov / 2;
-            const rayStep = 1; // Минимальный шаг для устранения пикселизации
+            const rayStep = 1;
             const numRays = Math.floor(canvas.width / rayStep);
             const rayAngleStep = fov / numRays;
 
-            // Рендерим пол и потолок
             for (let column = 0; column < canvas.width; column += rayStep) {
                 const i = Math.floor(column / rayStep);
                 const rayAngle = game.player.angle - halfFov + i * rayAngleStep;
                 drawFloorAndCeiling(column, rayAngle, rayStep);
             }
 
-            // Рендерим стены
             for (let i = 0; i < numRays; i++) {
                 const rayAngle = game.player.angle - halfFov + i * rayAngleStep;
                 castRay(rayAngle, i * rayStep, rayStep);
@@ -1154,7 +1169,6 @@
             const x1 = (column / canvas.width) * 2 - 1;
             const x2 = ((column + rayStep) / canvas.width) * 2 - 1;
 
-            // Пол
             for (let y = horizon; y < canvas.height; y += 2) {
                 const currentDist = canvas.height / (2.0 * y - canvas.height);
                 const weight = currentDist / 100;
@@ -1169,7 +1183,6 @@
                 drawQuad(x1, y1, x2, y2, floorTexX, floorTexY, floorTexX + (1 / 32), floorTexY + (1 / 32), game.assets.textures.floor, currentDist, [1, 1, 1, 1]);
             }
 
-            // Потолок
             for (let y = 0; y < horizon; y += 2) {
                 const currentDist = canvas.height / (canvas.height - 2.0 * y);
                 const weight = currentDist / 100;
@@ -1268,7 +1281,7 @@
             while (angle > Math.PI) angle -= 2*Math.PI;
             
             const fov = Math.PI / 3;
-            if (Math.abs(angle) > fov / 2) return -2; // Вне поля зрения
+            if (Math.abs(angle) > fov / 2) return -2;
             
             const screenX = (angle + fov/2) / fov * canvas.width;
             return (screenX / canvas.width) * 2 - 1;
@@ -1281,24 +1294,24 @@
         }
 
         function drawHUD() {
-            const ctx = canvas.getContext('2d');
+            hudCtx.clearRect(0, 0, hudCanvas.width, hudCanvas.height);
             const weapon = game.player.weapons[game.player.currentWeapon];
             const now = Date.now();
             const recoil = Math.min((now - weapon.lastShot) / 100, 1.0) * 0.1;
-            ctx.fillStyle = '#555';
-            ctx.fillRect(canvas.width * 0.4, canvas.height * 0.7 - canvas.height * recoil, canvas.width * 0.2, canvas.height * 0.2);
+            hudCtx.fillStyle = '#555';
+            hudCtx.fillRect(hudCanvas.width * 0.4, hudCanvas.height * 0.7 - hudCanvas.height * recoil, hudCanvas.width * 0.2, hudCanvas.height * 0.2);
             
             if (weapon.isReloading) {
                 const reloadProgress = (now - (weapon.lastShot + weapon.fireRate)) / weapon.reloadTime;
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-                ctx.fillRect(canvas.width * 0.3, canvas.height * 0.8, canvas.width * 0.4, 10);
-                ctx.fillStyle = '#f39c12';
-                ctx.fillRect(canvas.width * 0.3, canvas.height * 0.8, canvas.width * 0.4 * reloadProgress, 10);
+                hudCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                hudCtx.fillRect(hudCanvas.width * 0.3, hudCanvas.height * 0.8, hudCanvas.width * 0.4, 10);
+                hudCtx.fillStyle = '#f39c12';
+                hudCtx.fillRect(hudCanvas.width * 0.3, hudCanvas.height * 0.8, hudCanvas.width * 0.4 * reloadProgress, 10);
             }
 
-            ctx.fillStyle = 'white';
-            ctx.font = '16px Arial';
-            ctx.fillText(`FPS: ${game.fps}`, 10, 20);
+            hudCtx.fillStyle = 'white';
+            hudCtx.font = '16px Arial';
+            hudCtx.fillText(`FPS: ${game.fps}`, 10, 20);
         }
 
         function render() {
