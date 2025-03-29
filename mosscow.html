@@ -560,17 +560,17 @@
         
         // Track loaded assets
         function assetLoaded() {
-            game.assetsLoaded++;
-            const progress = Math.floor((game.assetsLoaded / game.totalAssets) * 100);
-            loadingProgress.style.width = `${progress}%`;
-            
-            if (game.assetsLoaded === game.totalAssets) {
-                // All assets loaded
-                setTimeout(() => {
-                    loadingScreen.style.display = 'none';
-                }, 500);
+                game.assetsLoaded++;
+                const progress = Math.floor((game.assetsLoaded / game.totalAssets) * 100);
+                loadingProgress.style.width = `${progress}%`;
+                
+                if (game.assetsLoaded === game.totalAssets) {
+                    // All assets loaded
+                    setTimeout(() => {
+                        loadingScreen.style.display = 'none';
+                    }, 500);
+                }
             }
-        }
         
         // Game loop
         function gameLoop(timestamp) {
