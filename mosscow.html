@@ -892,90 +892,100 @@
             drawEnemies();
         }
         
-        function castRay(angle, column) {
-            let rayX = game.player.x;
-            let rayY = game.player.y;
-            const rayDirX = Math.cos(angle);
-            const rayDirY = Math.sin(angle);
-            
-            let sideDistX, sideDistY;
-            const deltaDistX = Math.abs(1 / rayDirX);
-            const deltaDistY = Math.abs(1 / rayDirY);
-            
-            let stepX, stepY;
-            let mapX = Math.floor(rayX);
-            let mapY = Math.floor(rayY);
-            
-            if (rayDirX < 0) {
-                stepX = -1;
-                sideDistX = (game.player.x - mapX) * deltaDistX;
+       function castRay(angle, column) {
+    let rayX = game.player.x;
+    let rayY = game.player.y;
+    const rayDirX = Math.cos(angle);
+    const rayDirY = Math.sin(angle);
+    
+    let sideDistX, sideDistY;
+    const deltaDistX = Math.abs(1 / rayDirX);
+    const deltaDistY = Math.abs(1 / rayDirY);
+    
+    let stepX, stepY;
+    let mapX = Math.floor(rayX);
+    let mapY = Math.floor(rayY);
+    
+    if (rayDirX < 0) {
+        stepX = -1;
+        sideDistX = (game.player.x - mapX) * deltaDistX;
+    } else {
+        stepX = 1;
+        sideDistX = (mapX + 1.0 - game.player.x) * deltaDistX;
+    }
+    
+    if (rayDirY < 0) {
+        stepY = -1;
+        sideDistY = (game.player.y - mapY) * deltaDistY;
+    } else {
+        stepY = 1;
+        sideDistY = (mapY + 1.0 - game.player.y) * deltaDistY;
+    }
+    
+    let hit = false;
+    let side;
+    let wallDist;
+    
+    while (!hit) {
+        if (sideDistX < sideDistY) {
+            sideDistX += deltaDistX;
+            mapX += stepX;
+            side = 0;
+        } else {
+            sideDistY += deltaDistY;
+            mapY += stepY;
+            side = 1;
+        }
+        
+        if (mapX < 0 || mapX >= game.map.width || mapY < 0 || mapY >= game.map.height) {
+            hit = true;
+            wallDist = 100; // Далеко за пределами
+        } else if (game.map.grid[mapY][mapX] === 1) {
+            hit = true;
+            if (side === 0) {
+                wallDist = (mapX - game.player.x + (1 - stepX) / 2) / rayDirX;
             } else {
-                stepX = 1;
-                sideDistX = (mapX + 1.0 - game.player.x) * deltaDistX;
-            }
-            
-            if (rayDirY < 0) {
-                stepY = -1;
-                sideDistY = (game.player.y - mapY) * deltaDistY;
-            } else {
-                stepY = 1;
-                sideDistY = (mapY + 1.0 - game.player.y) * deltaDistY;
-            }
-            
-            let hit = false;
-            let side;
-            let wallDist;
-            
-            while (!hit) {
-                if (sideDistX < sideDistY) {
-                    sideDistX += deltaDistX;
-                    mapX += stepX;
-                    side = 0;
-                } else {
-                    sideDistY += deltaDistY;
-                    mapY += stepY;
-                    side = 1;
-                }
-                
-                if (mapX < 0 || mapX >= game.map.width || mapY < 0 || mapY >= game.map.height) {
-                    hit = true;
-                    wallDist = 100;
-                } else if (game.map.grid[mapY][mapX] === 1) {
-                    hit = true;
-                    if (side === 0) {
-                        wallDist = (mapX - game.player.x + (1 - stepX) / 2) / rayDirX;
-                    } else {
-                        wallDist = (mapY - game.player.y + (1 - stepY) / 2) / rayDirY;
-                    }
-                }
-            }
-            
-            const lineHeight = Math.floor(canvas.height / (wallDist + 0.0001));
-            let drawStart = -lineHeight / 2 + canvas.height / 2;
-            if (drawStart < 0) drawStart = 0;
-            let drawEnd = lineHeight / 2 + canvas.height / 2;
-            if (drawEnd >= canvas.height) drawEnd = canvas.height - 1;
-            
-            let color;
-            if (side === 1) {
-                color = '#666';
-            } else {
-                color = '#888';
-            }
-            
-            const shade = 1.0 - Math.min(wallDist / 15, 0.9);
-            const r = parseInt(color.substr(1, 2), 16) * shade;
-            const g = parseInt(color.substr(3, 2), 16) * shade;
-            const b = parseInt(color.substr(5, 2), 16) * shade;
-            color = `rgb(${r},${g},${b})`;
-            
-            ctx.fillStyle = color;
-            ctx.fillRect(column, drawStart, 1, drawEnd - drawStart);
-            
-            if (game.assets.textures.floor && game.assets.textures.ceiling) {
-                drawFloorAndCeiling(column, drawEnd, angle, wallDist);
+                wallDist = (mapY - game.player.y + (1 - stepY) / 2) / rayDirY;
             }
         }
+    }
+    
+    // Защита от NaN в wallDist
+    if (isNaN(wallDist) || wallDist <= 0) {
+        wallDist = 100; // Запасное значение для бесконечной дистанции
+    }
+    
+    const lineHeight = Math.floor(canvas.height / (wallDist + 0.0001));
+    let drawStart = -lineHeight / 2 + canvas.height / 2;
+    if (drawStart < 0) drawStart = 0;
+    let drawEnd = lineHeight / 2 + canvas.height / 2;
+    if (drawEnd >= canvas.height) drawEnd = canvas.height - 1;
+    
+    let color;
+    if (side === 1) {
+        color = '#666';
+    } else {
+        color = '#888';
+    }
+    
+    const shade = 1.0 - Math.min(wallDist / 15, 0.9);
+    const r = Math.floor(parseInt(color.substr(1, 2), 16) * shade);
+    const g = Math.floor(parseInt(color.substr(3, 2), 16) * shade);
+    const b = Math.floor(parseInt(color.substr(5, 2), 16) * shade);
+    
+    // Дополнительная защита от NaN
+    const safeR = isNaN(r) ? 100 : r;
+    const safeG = isNaN(g) ? 100 : g;
+    const safeB = isNaN(b) ? 100 : b;
+    
+    color = `rgb(${safeR},${safeG},${safeB})`;
+    ctx.fillStyle = color;
+    ctx.fillRect(column, drawStart, 1, drawEnd - drawStart);
+    
+    if (game.assets.textures.floor && game.assets.textures.ceiling) {
+        drawFloorAndCeiling(column, drawEnd, angle, wallDist);
+    }
+}
         
         function drawFloorAndCeiling(column, wallBottom, angle, wallDist) {
             const floorStart = wallBottom;
