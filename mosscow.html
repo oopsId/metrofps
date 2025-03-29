@@ -905,6 +905,7 @@
         else if (game.map.grid[mapY][mapX] === 1) {
             hit = true;
             wallDist = side === 0 ? (mapX - game.player.x + (1 - stepX) / 2) / rayDirX : (mapY - game.player.y + (1 - stepY) / 2) / rayDirY;
+            console.log(`Луч попал в стену на ${mapX},${mapY}, дистанция: ${wallDist}`);
         }
     }
     if (isNaN(wallDist) || wallDist <= 0) wallDist = 100;
@@ -921,12 +922,14 @@
     const texX = Math.floor(wallX * texWidth);
 
     if (game.assets.textures.wall) {
+        console.log("Рисуем текстуру стены");
         ctx.drawImage(
             game.assets.textures.wall,
             texX, 0, 1, game.assets.textures.wall.height,
             column, drawStart, rayStep, drawEnd - drawStart
         );
     } else {
+        console.log("Текстура стены не загружена, используем цвет");
         let color = side === 1 ? '#666' : '#888';
         const shade = 1.0 - Math.min(wallDist / 15, 0.9);
         const r = Math.floor(parseInt(color.substr(1, 2), 16) * shade);
@@ -940,39 +943,29 @@
 
     if (game.assets.textures.floor && game.assets.textures.ceiling) {
         drawFloorAndCeiling(column, drawEnd, angle, wallDist);
+    } else {
+        console.log("Текстуры пола или потолка не загружены");
     }
 }
         
-       function drawFloorAndCeiling(column, wallBottom, angle, wallDist) {
+      function drawFloorAndCeiling(column, wallBottom, angle, wallDist) {
     const floorStart = wallBottom;
     if (floorStart >= canvas.height) return;
-    
-    const maxFloorHeight = Math.min(floorStart + 100, canvas.height); // Ограничение до 100 пикселей
+    const maxFloorHeight = Math.min(floorStart + 100, canvas.height);
     for (let y = floorStart; y < maxFloorHeight; y++) {
         const currentDist = canvas.height / (2.0 * y - canvas.height);
         const weight = currentDist / wallDist;
-        
         const currentFloorX = weight * (game.player.x + Math.cos(angle) * wallDist) + (1.0 - weight) * game.player.x;
         const currentFloorY = weight * (game.player.y + Math.sin(angle) * wallDist) + (1.0 - weight) * game.player.y;
-        
-        const floorTexX = Math.floor(currentFloorX * 64) % 64;
-        const floorTexY = Math.floor(currentFloorY * 64) % 64;
-        
-        const ceilingTexX = floorTexX;
-        const ceilingTexY = 63 - floorTexY;
-        
-        ctx.drawImage(
-            game.assets.textures.floor,
-            floorTexX, floorTexY, 1, 1,
-            column, y, 4, 1 // Учитываем rayStep
-        );
-        
+        const floorTexX = Math.floor(currentFloorX * 64) % 64, floorTexY = Math.floor(currentFloorY * 64) % 64;
+        const ceilingTexX = floorTexX, ceilingTexY = 63 - floorTexY;
+        if (game.assets.textures.floor) {
+            ctx.drawImage(game.assets.textures.floor, floorTexX, floorTexY, 1, 1, column, y, 4, 1);
+        }
         const ceilingY = canvas.height - y;
-        ctx.drawImage(
-            game.assets.textures.ceiling,
-            ceilingTexX, ceilingTexY, 1, 1,
-            column, ceilingY, 4, 1
-        );
+        if (game.assets.textures.ceiling) {
+            ctx.drawImage(game.assets.textures.ceiling, ceilingTexX, ceilingTexY, 1, 1, column, ceilingY, 4, 1);
+        }
     }
 }
         
