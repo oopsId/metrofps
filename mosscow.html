@@ -1028,41 +1028,34 @@
         }
         
         function drawParticles() {
-            for (const particle of game.particles) {
-                const dx = particle.x - game.player.x;
-                const dy = particle.y - game.player.y;
-                const distance = Math.sqrt(dx*dx + dy*dy);
-                const angle = Math.atan2(dy, dx) - game.player.angle;
-                let normalizedAngle = angle;
-                while (normalizedAngle < -Math.PI) normalizedAngle += 2*Math.PI;
-                while (normalizedAngle > Math.PI) normalizedAngle -= 2*Math.PI;
-                
-                const fov = Math.PI / 3;
-                if (Math.abs(normalizedAngle) > fov / 2) continue;
-                
-                const particleSize = canvas.height / distance * particle.size;
-                const screenX = (normalizedAngle + fov/2) / fov * canvas.width - particleSize/2;
-                const screenY = canvas.height/2 - particleSize/2;
-                
-                const columnStart = Math.floor(screenX);
-                const columnEnd = Math.ceil(screenX + particleSize);
-                let visible = false;
-                for (let x = columnStart; x < columnEnd; x++) {
-                    if (x >= 0 && x < game.zBuffer.length && distance < game.zBuffer[x]) {
-                        visible = true;
-                        break;
-                    }
-                }
-                if (!visible) continue;
-                
-                ctx.fillStyle = particle.color;
-                ctx.globalAlpha = Math.min(particle.life / 100, 1.0);
-                ctx.beginPath();
-                ctx.arc(screenX + particleSize/2, screenY + particleSize/2, particleSize/2, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.globalAlpha = 1.0;
-            }
-        }
+    for (const particle of game.particles) {
+        const dx = particle.x - game.player.x;
+        const dy = particle.y - game.player.y;
+        const distance = Math.sqrt(dx*dx + dy*dy);
+        const angle = Math.atan2(dy, dx) - game.player.angle;
+        let normalizedAngle = angle;
+        while (normalizedAngle < -Math.PI) normalizedAngle += 2*Math.PI;
+        while (normalizedAngle > Math.PI) normalizedAngle -= 2*Math.PI;
+        
+        const fov = Math.PI / 3;
+        if (Math.abs(normalizedAngle) > fov / 2) continue;
+        
+        const particleSize = canvas.height / distance * particle.size;
+        const screenX = (normalizedAngle + fov/2) / fov * canvas.width - particleSize/2;
+        const screenY = canvas.height/2 - particleSize/2;
+        
+        // Проверяем видимость через zBuffer только в центре частицы
+        const centerX = Math.floor(screenX + particleSize/2);
+        if (centerX >= 0 && centerX < game.zBuffer.length && distance >= game.zBuffer[centerX]) continue;
+        
+        ctx.fillStyle = particle.color;
+        ctx.globalAlpha = Math.min(particle.life / 100, 1.0);
+        ctx.beginPath();
+        ctx.arc(screenX + particleSize/2, screenY + particleSize/2, particleSize/2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+    }
+}
         
         function drawHUD() {
             const weapon = game.player.weapons[game.player.currentWeapon];
