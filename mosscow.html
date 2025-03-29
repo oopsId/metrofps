@@ -513,7 +513,7 @@
             function assetLoaded() {
                 game.assetsLoaded++;
                 const progress = Math.floor((game.assetsLoaded / game.totalAssets) * 100);
-                loadingProgress.style.width = `${progress}%`;
+                 loadingProgress.style.width = `${isNaN(progress) ? 0 : progress}%`;
                 
                 if (game.assetsLoaded === game.totalAssets) {
                     setTimeout(() => {
@@ -799,7 +799,7 @@
         
         function updateHealthDisplay() {
             const healthPercent = (game.player.health / game.player.maxHealth) * 100;
-            healthFill.style.width = `${healthPercent}%`;
+            healthFill.style.width = `${isNaN(healthPercent) ? 0 : healthPercent}%`;
             if (healthPercent > 60) {
                 healthFill.style.backgroundColor = '#2ecc71';
             } else if (healthPercent > 30) {
@@ -884,19 +884,20 @@
             drawHUD();
         }
         
-        function draw3DView() {
-            const fov = Math.PI / 3;
-            const halfFov = fov / 2;
-            const numRays = canvas.width;
-            const rayAngleStep = fov / numRays;
-            
-            for (let i = 0; i < numRays; i++) {
-                const rayAngle = game.player.angle - halfFov + i * rayAngleStep;
-                castRay(rayAngle, i);
-            }
-            
-            drawEnemies();
+       function draw3DView() {
+       const fov = Math.PI / 3;
+       const halfFov = fov / 2;
+       const rayStep = 4;
+       const numRays = Math.floor(canvas.width / rayStep);
+       const rayAngleStep = fov / numRays;
+    
+        for (let i = 0; i < numRays; i++) {
+        const rayAngle = game.player.angle - halfFov + i * rayAngleStep;
+        castRay(rayAngle, i * rayStep);
         }
+    
+    drawEnemies();
+     }
         
        function castRay(angle, column) {
     let rayX = game.player.x;
@@ -986,44 +987,45 @@
     
     color = `rgb(${safeR},${safeG},${safeB})`;
     ctx.fillStyle = color;
-    ctx.fillRect(column, drawStart, 1, drawEnd - drawStart);
+    ctx.fillRect(column, drawStart, rayStep, drawEnd - drawStart);
     
     if (game.assets.textures.floor && game.assets.textures.ceiling) {
         drawFloorAndCeiling(column, drawEnd, angle, wallDist);
     }
 }
         
-        function drawFloorAndCeiling(column, wallBottom, angle, wallDist) {
-            const floorStart = wallBottom;
-            if (floorStart >= canvas.height) return;
-            
-            for (let y = floorStart; y < canvas.height; y++) {
-                const currentDist = canvas.height / (2.0 * y - canvas.height);
-                const weight = currentDist / wallDist;
-                
-                const currentFloorX = weight * (game.player.x + Math.cos(angle) * wallDist) + (1.0 - weight) * game.player.x;
-                const currentFloorY = weight * (game.player.y + Math.sin(angle) * wallDist) + (1.0 - weight) * game.player.y;
-                
-                const floorTexX = Math.floor(currentFloorX * 64) % 64;
-                const floorTexY = Math.floor(currentFloorY * 64) % 64;
-                
-                const ceilingTexX = floorTexX;
-                const ceilingTexY = 63 - floorTexY;
-                
-                ctx.drawImage(
-                    game.assets.textures.floor,
-                    floorTexX, floorTexY, 1, 1,
-                    column, y, 1, 1
-                );
-                
-                const ceilingY = canvas.height - y;
-                ctx.drawImage(
-                    game.assets.textures.ceiling,
-                    ceilingTexX, ceilingTexY, 1, 1,
-                    column, ceilingY, 1, 1
-                );
-            }
-        }
+       function drawFloorAndCeiling(column, wallBottom, angle, wallDist) {
+    const floorStart = wallBottom;
+    if (floorStart >= canvas.height) return;
+    
+    const maxFloorHeight = Math.min(floorStart + 100, canvas.height); // Ограничение до 100 пикселей
+    for (let y = floorStart; y < maxFloorHeight; y++) {
+        const currentDist = canvas.height / (2.0 * y - canvas.height);
+        const weight = currentDist / wallDist;
+        
+        const currentFloorX = weight * (game.player.x + Math.cos(angle) * wallDist) + (1.0 - weight) * game.player.x;
+        const currentFloorY = weight * (game.player.y + Math.sin(angle) * wallDist) + (1.0 - weight) * game.player.y;
+        
+        const floorTexX = Math.floor(currentFloorX * 64) % 64;
+        const floorTexY = Math.floor(currentFloorY * 64) % 64;
+        
+        const ceilingTexX = floorTexX;
+        const ceilingTexY = 63 - floorTexY;
+        
+        ctx.drawImage(
+            game.assets.textures.floor,
+            floorTexX, floorTexY, 1, 1,
+            column, y, 4, 1 // Учитываем rayStep
+        );
+        
+        const ceilingY = canvas.height - y;
+        ctx.drawImage(
+            game.assets.textures.ceiling,
+            ceilingTexX, ceilingTexY, 1, 1,
+            column, ceilingY, 4, 1
+        );
+    }
+}
         
         function drawEnemies() {
             const sortedEnemies = [...game.enemies].sort((a, b) => {
