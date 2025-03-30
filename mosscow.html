@@ -317,7 +317,7 @@
         const restartBtns = document.querySelectorAll('.restart-btn');
         restartBtns.forEach(btn => {
             btn.addEventListener('click', () => {
-                userInteracted = true; // Пользователь взаимодействовал
+                userInteracted = true;
                 resetGame();
             });
         });
@@ -445,51 +445,52 @@
             }
         `;
 
-       function createShader(gl, type, source) {
-    const shader = gl.createShader(type);
-    gl.shaderSource(shader, source);
-    gl.compileShader(shader);
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        console.error('Ошибка компиляции шейдера:', gl.getShaderInfoLog(shader));
-        gl.deleteShader(shader);
-        return null;
-    }
-    console.log('Шейдер успешно скомпилирован:', type === gl.VERTEX_SHADER ? 'Vertex Shader' : 'Fragment Shader');
-    return shader;
-}
+        function createShader(gl, type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error('Ошибка компиляции шейдера:', gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+            console.log('Шейдер успешно скомпилирован:', type === gl.VERTEX_SHADER ? 'Vertex Shader' : 'Fragment Shader');
+            return shader;
+        }
 
-function createProgram(gl, vertexShader, fragmentShader) {
-    if (!vertexShader || !fragmentShader) {
-        console.error('Один из шейдеров не скомпилирован');
-        return null;
-    }
-    const program = gl.createProgram();
-    gl.attachShader(program, vertexShader);
-    gl.attachShader(program, fragmentShader);
-    gl.linkProgram(program);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-        console.error('Ошибка линковки программы:', gl.getProgramInfoLog(program));
-        return null;
-    }
-    console.log('Программа WebGL успешно связана');
-    return program;
-}
+        function createProgram(gl, vertexShader, fragmentShader) {
+            if (!vertexShader || !fragmentShader) {
+                console.error('Один из шейдеров не скомпилирован');
+                return null;
+            }
+            const program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                console.error('Ошибка линковки программы:', gl.getProgramInfoLog(program));
+                return null;
+            }
+            console.log('Программа WebGL успешно связана');
+            return program;
+        }
 
-// Программа для стен, пола, потолка, врагов
-const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
-const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
-const program = createProgram(gl, vertexShader, fragmentShader);
-if (!program) {
-    throw new Error('Не удалось создать основную программу WebGL');
-}
+        // Программа для стен, пола, потолка, врагов
+        const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+        const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+        const program = createProgram(gl, vertexShader, fragmentShader);
+        if (!program) {
+            throw new Error('Не удалось создать основную программу WebGL');
+        }
 
-// Программа для частиц
-const particleVertexShader = createShader(gl, gl.VERTEX_SHADER, particleVertexShaderSource);
-const particleFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, particleFragmentShaderSource);
-const particleProgram = createProgram(gl, particleVertexShader, particleFragmentShader);
-if (!particleProgram) {
-    throw new Error('Не удалось создать программу для частиц');
-}
+        // Программа для частиц
+        const particleVertexShader = createShader(gl, gl.VERTEX_SHADER, particleVertexShaderSource);
+        const particleFragmentShader = createShader(gl, gl.FRAGMENT_SHADER, particleFragmentShaderSource);
+        const particleProgram = createProgram(gl, particleVertexShader, particleFragmentShader);
+        if (!particleProgram) {
+            throw new Error('Не удалось создать программу для частиц');
+        }
+
         // Атрибуты и униформы для основной программы
         gl.useProgram(program);
         const positionLocation = gl.getAttribLocation(program, 'a_position');
@@ -691,7 +692,7 @@ if (!particleProgram) {
                 }
             });
             canvas.addEventListener('mousedown', () => {
-                userInteracted = true; // Пользователь взаимодействовал
+                userInteracted = true;
                 canvas.requestPointerLock();
             });
             document.addEventListener('pointerlockchange', () => {
@@ -951,7 +952,7 @@ if (!particleProgram) {
                 particle.life -= deltaTime / particle.maxLife;
                 if (particle.life <= 0) game.particles.splice(i, 1);
             }
-            if (game.particles.length > 50) game.particles.splice(0, game.particles.length - 50); // Ограничим частицы
+            if (game.particles.length > 50) game.particles.splice(0, game.particles.length - 50);
         }
 
         function createParticle(x, y, count, color, maxLife) {
@@ -1088,46 +1089,46 @@ if (!particleProgram) {
             requestAnimationFrame(gameLoop);
         }
 
-       function drawQuad(x1, y1, x2, y2, texX1, texY1, texX2, texY2, texture, wallDist, color) {
-    if (!texture) {
-        console.warn('Текстура не загружена, используется запасная текстура стены');
-        texture = fallbackTextures.wall;
-    }
-    gl.useProgram(program);
-    const positions = new Float32Array([
-        x1, y1,
-        x2, y1,
-        x1, y2,
-        x2, y2
-    ]);
+        function drawQuad(x1, y1, x2, y2, texX1, texY1, texX2, texY2, texture, wallDist, color) {
+            if (!texture) {
+                console.warn('Текстура не загружена, используется запасная текстура стены');
+                texture = fallbackTextures.wall;
+            }
+            gl.useProgram(program);
+            const positions = new Float32Array([
+                x1, y1,
+                x2, y1,
+                x1, y2,
+                x2, y2
+            ]);
 
-    const texCoords = new Float32Array([
-        texX1, texY1,
-        texX2, texY1,
-        texX1, texY2,
-        texX2, texY2
-    ]);
+            const texCoords = new Float32Array([
+                texX1, texY1,
+                texX2, texY1,
+                texX1, texY2,
+                texX2, texY2
+            ]);
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
 
-    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
+            gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
 
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.uniform1i(textureLocation, 0);
-    gl.uniform1f(wallDistLocation, wallDist);
-    gl.uniform4fv(colorLocation, color);
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, texture);
+            gl.uniform1i(textureLocation, 0);
+            gl.uniform1f(wallDistLocation, wallDist);
+            gl.uniform4fv(colorLocation, color);
 
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-    console.log('Вызван drawQuad для рендеринга');
-}
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            console.log('Вызван drawQuad для рендеринга');
+        }
 
         function draw3DView() {
             const fov = Math.PI / 3;
             const halfFov = fov / 2;
-            const rayStep = 4; // Увеличиваем шаг для оптимизации
+            const rayStep = 8;
             const numRays = Math.floor(canvas.width / rayStep);
             const rayAngleStep = fov / numRays;
 
@@ -1198,8 +1199,7 @@ if (!particleProgram) {
             const x1 = (column / canvas.width) * 2 - 1;
             const x2 = ((column + rayStep) / canvas.width) * 2 - 1;
 
-            // Пол
-            for (let y = horizon; y < canvas.height; y += 8) { // Увеличиваем шаг для оптимизации
+            for (let y = horizon; y < canvas.height; y += 16) {
                 const currentDist = canvas.height / (2.0 * y - canvas.height);
                 const weight = currentDist / 100;
                 const currentFloorX = weight * (game.player.x + Math.cos(angle) * 100) + (1.0 - weight) * game.player.x;
@@ -1208,13 +1208,12 @@ if (!particleProgram) {
                 const floorTexY = currentFloorY * 32 % 32 / 32;
 
                 const y1 = (y / canvas.height) * 2 - 1;
-                const y2 = ((y + 8) / canvas.height) * 2 - 1;
+                const y2 = ((y + 16) / canvas.height) * 2 - 1;
 
                 drawQuad(x1, y1, x2, y2, floorTexX, floorTexY, floorTexX + (1 / 32), floorTexY + (1 / 32), game.assets.textures.floor || fallbackTextures.floor, currentDist, [1, 1, 1, 1]);
             }
 
-            // Потолок
-            for (let y = 0; y < horizon; y += 8) { // Увеличиваем шаг для оптимизации
+            for (let y = 0; y < horizon; y += 16) {
                 const currentDist = canvas.height / (canvas.height - 2.0 * y);
                 const weight = currentDist / 100;
                 const currentCeilingX = weight * (game.player.x + Math.cos(angle) * 100) + (1.0 - weight) * game.player.x;
@@ -1223,7 +1222,7 @@ if (!particleProgram) {
                 const ceilingTexY = currentCeilingY * 32 % 32 / 32;
 
                 const y1 = (y / canvas.height) * 2 - 1;
-                const y2 = ((y + 8) / canvas.height) * 2 - 1;
+                const y2 = ((y + 16) / canvas.height) * 2 - 1;
 
                 drawQuad(x1, y1, x2, y2, ceilingTexX, ceilingTexY, ceilingTexX + (1 / 32), ceilingTexY + (1 / 32), game.assets.textures.ceiling || fallbackTextures.ceiling, currentDist, [1, 1, 1, 1]);
             }
@@ -1265,42 +1264,8 @@ if (!particleProgram) {
         }
 
         function drawParticles() {
-            if (game.particles.length === 0) return;
-
-            gl.useProgram(particleProgram);
-            const positions = new Float32Array(game.particles.length * 2);
-            const texCoords = new Float32Array(game.particles.length * 2);
-            const lives = new Float32Array(game.particles.length);
-
-            for (let i = 0; i < game.particles.length; i++) {
-                const particle = game.particles[i];
-                const screenX = projectToScreenX(particle.x, particle.y);
-                const screenY = projectToScreenY(particle.x, particle.y);
-                positions[i * 2] = screenX;
-                positions[i * 2 + 1] = screenY;
-                texCoords[i * 2] = 0.5;
-                texCoords[i * 2 + 1] = 0.5;
-                lives[i] = particle.life;
-            }
-
-            gl.bindBuffer(gl.ARRAY_BUFFER, particlePositionBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
-
-            gl.bindBuffer(gl.ARRAY_BUFFER, particleTexCoordBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
-
-            gl.bindBuffer(gl.ARRAY_BUFFER, particleLifeBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, lives, gl.STATIC_DRAW);
-
-            gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, game.assets.textures.particle || fallbackTextures.particle);
-            gl.uniform1i(particleTextureLocation, 0);
-            gl.uniform1f(pointSizeLocation, 10.0);
-
-            gl.enable(gl.BLEND);
-            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-            gl.drawArrays(gl.POINTS, 0, game.particles.length);
-            gl.disable(gl.BLEND);
+            console.log('Рендеринг частиц отключен для оптимизации');
+            return;
         }
 
         function projectToScreenX(x, y) {
@@ -1347,12 +1312,17 @@ if (!particleProgram) {
         }
 
         function render() {
+            console.log('Начало рендеринга кадра');
             gl.clearColor(0, 0, 0, 1);
             gl.clear(gl.COLOR_BUFFER_BIT);
             game.zBuffer.fill(Infinity);
+            console.log('Вызывается draw3DView');
             draw3DView();
+            console.log('Вызывается drawParticles');
             drawParticles();
+            console.log('Вызывается drawHUD');
             drawHUD();
+            console.log('Конец рендеринга кадра');
         }
 
         initGame();
