@@ -414,8 +414,7 @@
             uniform vec4 u_color;
             void main() {
                 vec4 texColor = texture2D(u_texture, v_texCoord);
-                float brightness = 1.0 / (u_wallDist + 0.1);
-                gl_FragColor = texColor * brightness * u_color;
+                gl_FragColor = texColor * u_color;
             }
         `;
 
@@ -582,7 +581,6 @@
             }
 
             spawnSingleEnemy();
-            setTimeout(spawnSingleEnemy, 5000);
         }
 
         function generateMap() {
@@ -681,7 +679,7 @@
                 game.keys[e.key.toLowerCase()] = true;
                 if (e.key === '1') { game.player.currentWeapon = 0; updateWeaponDisplay(); }
                 else if (e.key === '2') { game.player.currentWeapon = 1; updateWeaponDisplay(); }
-                else if (e.key.toLowerCase() === 'r') reloadWeapon();
+                else if (e.key.toLowerCase() === ' discord.comr') reloadWeapon();
             });
             window.addEventListener('keyup', (e) => {
                 game.keys[e.key.toLowerCase()] = false;
@@ -1109,6 +1107,10 @@
                 texX2, texY2
             ]);
 
+            console.log('Координаты вершин:', { x1, y1, x2, y2 });
+            console.log('Текстурные координаты:', { texX1, texY1, texX2, texY2 });
+            console.log('wallDist:', wallDist);
+
             gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
             gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
 
@@ -1128,7 +1130,7 @@
         function draw3DView() {
             const fov = Math.PI / 3;
             const halfFov = fov / 2;
-            const rayStep = 8;
+            const rayStep = 16;
             const numRays = Math.floor(canvas.width / rayStep);
             const rayAngleStep = fov / numRays;
 
@@ -1199,7 +1201,7 @@
             const x1 = (column / canvas.width) * 2 - 1;
             const x2 = ((column + rayStep) / canvas.width) * 2 - 1;
 
-            for (let y = horizon; y < canvas.height; y += 16) {
+            for (let y = horizon; y < canvas.height; y += 32) {
                 const currentDist = canvas.height / (2.0 * y - canvas.height);
                 const weight = currentDist / 100;
                 const currentFloorX = weight * (game.player.x + Math.cos(angle) * 100) + (1.0 - weight) * game.player.x;
@@ -1208,12 +1210,12 @@
                 const floorTexY = currentFloorY * 32 % 32 / 32;
 
                 const y1 = (y / canvas.height) * 2 - 1;
-                const y2 = ((y + 16) / canvas.height) * 2 - 1;
+                const y2 = ((y + 32) / canvas.height) * 2 - 1;
 
                 drawQuad(x1, y1, x2, y2, floorTexX, floorTexY, floorTexX + (1 / 32), floorTexY + (1 / 32), game.assets.textures.floor || fallbackTextures.floor, currentDist, [1, 1, 1, 1]);
             }
 
-            for (let y = 0; y < horizon; y += 16) {
+            for (let y = 0; y < horizon; y += 32) {
                 const currentDist = canvas.height / (canvas.height - 2.0 * y);
                 const weight = currentDist / 100;
                 const currentCeilingX = weight * (game.player.x + Math.cos(angle) * 100) + (1.0 - weight) * game.player.x;
@@ -1222,7 +1224,7 @@
                 const ceilingTexY = currentCeilingY * 32 % 32 / 32;
 
                 const y1 = (y / canvas.height) * 2 - 1;
-                const y2 = ((y + 16) / canvas.height) * 2 - 1;
+                const y2 = ((y + 32) / canvas.height) * 2 - 1;
 
                 drawQuad(x1, y1, x2, y2, ceilingTexX, ceilingTexY, ceilingTexX + (1 / 32), ceilingTexY + (1 / 32), game.assets.textures.ceiling || fallbackTextures.ceiling, currentDist, [1, 1, 1, 1]);
             }
