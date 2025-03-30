@@ -1088,36 +1088,41 @@ if (!particleProgram) {
             requestAnimationFrame(gameLoop);
         }
 
-        function drawQuad(x1, y1, x2, y2, texX1, texY1, texX2, texY2, texture, wallDist, color) {
-            gl.useProgram(program);
-            const positions = new Float32Array([
-                x1, y1,
-                x2, y1,
-                x1, y2,
-                x2, y2
-            ]);
+       function drawQuad(x1, y1, x2, y2, texX1, texY1, texX2, texY2, texture, wallDist, color) {
+    if (!texture) {
+        console.warn('Текстура не загружена, используется запасная текстура стены');
+        texture = fallbackTextures.wall;
+    }
+    gl.useProgram(program);
+    const positions = new Float32Array([
+        x1, y1,
+        x2, y1,
+        x1, y2,
+        x2, y2
+    ]);
 
-            const texCoords = new Float32Array([
-                texX1, texY1,
-                texX2, texY1,
-                texX1, texY2,
-                texX2, texY2
-            ]);
+    const texCoords = new Float32Array([
+        texX1, texY1,
+        texX2, texY1,
+        texX1, texY2,
+        texX2, texY2
+    ]);
 
-            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
 
-            gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
-            gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, texCoords, gl.STATIC_DRAW);
 
-            gl.activeTexture(gl.TEXTURE0);
-            gl.bindTexture(gl.TEXTURE_2D, texture);
-            gl.uniform1i(textureLocation, 0);
-            gl.uniform1f(wallDistLocation, wallDist);
-            gl.uniform4fv(colorLocation, color);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.uniform1i(textureLocation, 0);
+    gl.uniform1f(wallDistLocation, wallDist);
+    gl.uniform4fv(colorLocation, color);
 
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-        }
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    console.log('Вызван drawQuad для рендеринга');
+}
 
         function draw3DView() {
             const fov = Math.PI / 3;
